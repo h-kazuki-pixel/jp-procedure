@@ -415,23 +415,24 @@ async function pageSearch(params, my) {
 
 // ---- 改正の記録を描く ----
 async function changeBlocks(where, my, opts = {}) {
-  const rows = await sparql(`SELECT ?ch ?prov ?provLabel ?kind ?kindLabel ?start ?end ?old ?oldText ?oldAsOf ?new ?newText ?newAsOf ?moved ?movedLabel ?movedText WHERE {
+  // 2 つの問いを並べて投げる(どちらも where だけで決まる)。移った先の文言は、日付を決めた軽い問いで引く
+  const [rows, extra] = await Promise.all([sparql(`SELECT ?ch ?prov ?provLabel ?kind ?kindLabel ?start ?end ?old ?oldText ?new ?newText ?moved ?movedLabel WHERE {
     ${where}
     ?ch a jpp:ProvisionChange ; jpp:provision ?prov ; jpp:changeKind ?kind ; dct:temporal ?per .
     ?prov rdfs:label ?provLabel . ?kind skos:prefLabel ?kindLabel . ?per dcat:startDate ?start ; dcat:endDate ?end .
     OPTIONAL { ?ch jpp:oldVersion ?old . ?old jpp:text ?oldText . }
     OPTIONAL { ?ch jpp:newVersion ?new . ?new jpp:text ?newText . }
-    OPTIONAL { ?ch jpp:movedTo ?moved . ?moved rdfs:label ?movedLabel .
-               OPTIONAL { ?moved eli:is_realized_by ?mv . ?mv jpp:asOf ?end ; jpp:text ?movedText } }
-  } ORDER BY ?start ?provLabel`);
+    OPTIONAL { ?ch jpp:movedTo ?moved . ?moved rdfs:label ?movedLabel }
+  } ORDER BY ?start ?provLabel`), sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote ?movedText WHERE {
+    ${where}
+    { ?ch jpp:candidate ?cand . ?cand rdfs:label ?candLabel } UNION
+    { ?ch jpp:lawRevisionInPeriod ?rev . ?rev jpp:enforcementDate ?revDate . OPTIONAL { ?rev jpp:amendmentLawNum ?revNum } } UNION
+    { ?ch jpp:review ?rv . ?rv jpp:reviewerType/skos:prefLabel ?rvWho ; jpp:reviewDate ?rvDate ; jpp:reviewResult/skos:prefLabel ?rvRes . OPTIONAL { ?rv jpp:reviewReason ?rvReason } OPTIONAL { ?rv jpp:reviewNote ?rvNote } } UNION
+    { ?ch jpp:movedTo ?moved ; dct:temporal/dcat:endDate ?end . ?moved eli:is_realized_by ?mv . ?mv jpp:asOf ?end ; jpp:text ?movedText } } ORDER BY ?revDate ?rvDate`)]);
   if (my !== seq || !rows.length) return rows.length ? '' : null;
   const seen = new Map(); for (const r of rows) if (!seen.has(r.ch)) seen.set(r.ch, r);
   const chs = [...seen.values()];
-  const extra = await sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote WHERE {
-    VALUES ?ch { ${chs.map(r => iri(r.ch)).join(' ')} }
-    { ?ch jpp:candidate ?cand . ?cand rdfs:label ?candLabel } UNION
-    { ?ch jpp:lawRevisionInPeriod ?rev . ?rev jpp:enforcementDate ?revDate . OPTIONAL { ?rev jpp:amendmentLawNum ?revNum } } UNION
-    { ?ch jpp:review ?rv . ?rv jpp:reviewerType/skos:prefLabel ?rvWho ; jpp:reviewDate ?rvDate ; jpp:reviewResult/skos:prefLabel ?rvRes . OPTIONAL { ?rv jpp:reviewReason ?rvReason } OPTIONAL { ?rv jpp:reviewNote ?rvNote } } } ORDER BY ?revDate ?rvDate`);
+  for (const x of extra) if (x.movedText && seen.has(x.ch)) seen.get(x.ch).movedText = x.movedText;
   if (my !== seq) return '';
   const cands = {}, revs = {}, rvs = {};
   for (const x of extra) { if (x.cand) (cands[x.ch] ||= []).push(x); if (x.rev) (revs[x.ch] ||= []).push(x); if (x.rv) (rvs[x.ch] ||= []).push(x); }
@@ -440,7 +441,7 @@ async function changeBlocks(where, my, opts = {}) {
     let L = esc(oldT), R = esc(newT);
     if (r.oldText && (moved ? r.movedText : r.newText)) [L, R] = diffText(oldT, newT);
     const rightTitle = moved ? `移った先 ${link(r.moved, r.movedLabel)} の文言(${esc(r.end)} 時点)` : `新しい文言(${esc(r.end)} 時点)`;
-    const rightBody = (moved ? r.movedText : r.newText) ? R : (r.kind.includes('removed') ? '(この番号の条・項・号は、新しい版にありません)' : '(新しい文言はありません)');
+    const rightBody = (moved ? r.movedText : r.newText) ? R : (moved ? '(移った先の文言は、このデータにありません。e-Gov で確かめてください)' : r.kind.includes('removed') ? '(この番号の条・項・号は、新しい版にありません)' : '(新しい文言はありません)');
     const cl = cands[r.ch] || [], rv = revs[r.ch] || [];
     return `<div class="change">
       <div><span class="tag">${esc(r.kindLabel)}</span> ${opts.showProv ? link(r.prov, r.provLabel) + ' ' : ''}<span class="muted">比べた期間 ${esc(r.start)}〜${esc(r.end)}</span></div>
@@ -460,9 +461,12 @@ async function changeBlocks(where, my, opts = {}) {
 // ---- 手続 ----
 async function pageProcedure(id, my) {
   const u = B + 'procedure/' + id;
-  show(loading());
-  try {
-    const rows = await sparql(`SELECT ?title ?id ?desc ?org ?orgU ?type ?lawName ?citText ?law ?lawLabel ?lid ?prov ?provLabel ?mrLabel WHERE {
+  // 骨組みをすぐに出す(待っている間は「読み込んでいます」)
+  show(`<p class="muted">手続ID ${esc(id)}</p><div id="info">${loading('手続の名前と根拠を読み込んでいます…')}</div>
+    <h2>根拠の条・項・号の変化</h2><div id="chg">${loading('根拠の条文の変化を読み込んでいます…')}</div>
+    <p class="muted">データ: <a href="${esc(CONFIG.endpoint + '?query=' + encodeURIComponent('DESCRIBE ' + iri(u)))}" rel="noopener">この手続の RDF(DESCRIBE)</a></p>`);
+  // 2 つを並べて投げる(変化の問いは、手続の基本を待たない)
+  const pInfo = sparql(`SELECT ?title ?id ?desc ?org ?orgU ?type ?lawName ?citText ?law ?lawLabel ?lid ?prov ?provLabel ?mrLabel WHERE {
       BIND(${iri(u)} AS ?ps) ?ps a cpsv:PublicService ; dct:title ?title ; dct:identifier ?id .
       OPTIONAL { ?ps dct:description ?desc }
       OPTIONAL { ?ps cv:hasCompetentAuthority ?orgU . ?orgU skos:prefLabel ?org }
@@ -472,10 +476,15 @@ async function pageProcedure(id, my) {
         OPTIONAL { ?c jpp:citedLaw ?law . ?law rdfs:label ?lawLabel ; eli:id_local ?lid }
         OPTIONAL { ?c jpp:citedProvision ?prov . ?prov rdfs:label ?provLabel }
         OPTIONAL { ?c jpp:matchResult/skos:prefLabel ?mrLabel } } }`);
+  const pChg = changeBlocks(`?ch jpp:affects ${iri(u)} .`, my, { showProv: true });
+  pChg.catch(() => {});   // 先に基本の失敗を出す。変化の失敗は下で出す
+  let r;
+  try {
+    const rows = await pInfo;
     if (my !== seq) return;
     if (!rows.length) { show(`<h1>手続が見つかりません</h1><p>${esc(u)}</p>`); return; }
-    const r = rows[0];
-    show(`<p class="muted">手続ID ${esc(r.id)}</p><h1>${esc(r.title)}</h1>
+    r = rows[0];
+    document.getElementById('info').innerHTML = `<h1>${esc(r.title)}</h1>
       <dl class="kv">
         <dt>所管</dt><dd>${esc(r.org || '—')}</dd>
         <dt>類型</dt><dd>${esc(r.type || '—')}</dd>
@@ -484,13 +493,13 @@ async function pageProcedure(id, my) {
           ${r.lid ? ` — <a href="${esc(egov(r.lid))}" rel="noopener">e-Gov で法令を開く</a>` : ''}
           <br><span class="muted">照合の結果: ${esc(r.mrLabel || '—')}</span></dd>
       </dl>
-      ${r.desc ? `<p class="muted">${esc(r.desc)}</p>` : ''}
-      <h2>根拠の条・項・号の変化</h2><div id="chg">${loading()}</div>
-      <p class="muted">データ: <a href="${esc(CONFIG.endpoint + '?query=' + encodeURIComponent('DESCRIBE ' + iri(u)))}" rel="noopener">この手続の RDF(DESCRIBE)</a></p>`);
-    const html = await changeBlocks(`?ch jpp:affects ${iri(u)} .`, my, { showProv: true });
+      ${r.desc ? `<p class="muted">${esc(r.desc)}</p>` : ''}`;
+  } catch (e) { if (my === seq) fail(e); return; }
+  try {
+    const html = await pChg;
     if (my !== seq) return;
     document.getElementById('chg').innerHTML = html === null ? `<p>比べた期間に、根拠の条・項・号の変化は見つかりませんでした${r.prov ? '' : '(根拠の条・項・号まで照合できていないので、比べていません)'}。</p>` : html;
-  } catch (e) { if (my === seq) fail(e); }
+  } catch (e) { if (my === seq) document.getElementById('chg').innerHTML = errBox(e); }
 }
 
 // ---- 条・項・号 ----
