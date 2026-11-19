@@ -109,8 +109,8 @@ footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85
 'use strict';
 // ===== 設定(ここだけを変える) =====
 const CONFIG = {
-  // SPARQL の行き先。手元では `oxigraph serve-read-only --location <店> --bind 127.0.0.1:7878 --cors`
-  endpoint: 'http://127.0.0.1:7878/query',
+  // SPARQL の行き先(Cloud Run、読むだけ)。手元で試すときは `oxigraph serve-read-only --location <店> --bind 127.0.0.1:7878 --cors` を立てて http://127.0.0.1:7878/query にする
+  endpoint: 'https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query',
   base: 'https://w3id.org/jp-procedure/',                         // データの URI の基点
   period: { start: '2025-11-01', end: '2026-11-18' },             // 初めに比べた期間(数と文言の並べの基準)
   status: 'status.json',                                          // 毎週の追跡の結果(同じ場所)
@@ -164,7 +164,7 @@ async function sparql(q) {
   } catch (e) {
     throw offlineError();
   }
-  if (r.status === 401 || r.status === 403) throw offlineError();   // 公開の前の Cloud Run は認証つきなので、ブラウザからは 403 になる
+  if (r.status === 401 || r.status === 403) throw offlineError();   // 認証つきに戻したときなど、ブラウザからは 403 になる
   if (!r.ok) throw new Error('SPARQL の答えが ' + r.status + ': ' + (await r.text()).slice(0, 300));
   const j = await r.json();
   if ('boolean' in j) return j.boolean;
@@ -182,8 +182,8 @@ function link(u, text) {
 }
 function egov(lawId) { return `https://laws.e-gov.go.jp/law/${encodeURIComponent(lawId)}`; }
 function show(html) { $app.innerHTML = html; }
-// SPARQL の行き先に問い合わせられないとき(公開の前など)は、エラーでなく「準備中」と出す
-const OFFLINE = 'SPARQL サーバーは公開の準備中です。データのファイル(data/)は使えます。';
+// SPARQL の行き先に問い合わせられないとき(サーバーを止めたときなど)は、エラーでなく案内を出す
+const OFFLINE = 'SPARQL サーバーに問い合わせられません。データのファイル(data/)は使えます。';
 function offlineError() { const e = new Error(OFFLINE); e.offline = true; return e; }
 function errBox(e) {
   if (e && e.offline) return `<div class="note offline">${esc(OFFLINE)} <a href="${esc(CONFIG.repo)}#ファイル" rel="noopener">データのファイル</a>・<a href="#/changed">変わった手続の一覧</a>・<a href="#/">はじめ</a></div>`;

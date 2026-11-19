@@ -11,7 +11,7 @@
 #   - それ以外(Turtle・JSON-LD・Accept が */* や無いときを含む)は、Cloud Run の SPARQL(読むだけ)の DESCRIBE へ 303
 #     返る形は Accept で決まる(text/turtle なら Turtle、application/ld+json なら JSON-LD、*/* や無いときは N-Triples の形)
 # - それ以外(一番上など)は、GitHub Pages へ 302
-# CLOUD_RUN_HOST は、公開の日に Cloud Run の URL のホスト名に置き換える(下書き)。
+# 転送先の SPARQL は Cloud Run(読むだけ、だれでも引ける)。
 # Cloud Run を止めるときは、DESCRIBE の行を一括ダウンロードの案内(GitHub Pages)へ直す(deploy.md の「止めるとき」)。
 # 手元の Apache(httpd 2.4)で、転送先と百分率符号を確かめた(reports/prepush-report.md)。
 #
@@ -32,7 +32,7 @@ RewriteCond %{HTTP_ACCEPT} application/xhtml\+xml
 RewriteRule ^((procedure|provision|law|change|record|organisation|code)/.+)$ https://h-kazuki-pixel.github.io/jp-procedure/view.html?uri=https://w3id.org/jp-procedure/$1 [R=303,L,NE]
 
 # それ以外はすべて DESCRIBE(< > 空白は百分率符号で書く。\% は RewriteCond の後方参照と取り違えないため)
-RewriteRule ^((procedure|provision|law|change|record|organisation|code)/.+)$ https://CLOUD_RUN_HOST/query?query=DESCRIBE\%20\%3Chttps://w3id.org/jp-procedure/$1\%3E [R=303,L,NE]
+RewriteRule ^((procedure|provision|law|change|record|organisation|code)/.+)$ https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE\%20\%3Chttps://w3id.org/jp-procedure/$1\%3E [R=303,L,NE]
 
 # それ以外(一番上の https://w3id.org/jp-procedure/ など)
 RewriteRule ^(.*)$ https://h-kazuki-pixel.github.io/jp-procedure/$1 [R=302,L]
