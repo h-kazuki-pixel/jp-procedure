@@ -1,0 +1,12 @@
+# gcloud builds submit --config deploy/cloudbuild.yaml --substitutions _IMAGE=<リポジトリ>/sparql,_TAG=<日付> .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'deploy/Dockerfile', '-t', '${_IMAGE}:${_TAG}', '.']
+images: ['${_IMAGE}:${_TAG}']
+options:
+  # 入れ替え用のアカウントとして動かすときは、ログの置き場所の指定が要る(Cloud Logging だけに書く)
+  logging: CLOUD_LOGGING_ONLY
+substitutions:
+  _IMAGE: ''
+  _TAG: manual
+timeout: 1800s

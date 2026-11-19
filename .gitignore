@@ -1,0 +1,13 @@
+# 作り直しの途中のもの(公開しない)
+data/raw/
+data/api/
+data/r6.csv
+data/r7.csv
+data/tracking/bulk/
+/out/
+/rdf/
+/store/
+/.venv/
+__pycache__/
+*.pyc
+.DS_Store

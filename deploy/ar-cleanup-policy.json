@@ -1,0 +1,12 @@
+[
+  {
+    "name": "delete-all",
+    "action": {"type": "Delete"},
+    "condition": {"tagState": "any"}
+  },
+  {
+    "name": "keep-newest-4",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {"keepCount": 4}
+  }
+]

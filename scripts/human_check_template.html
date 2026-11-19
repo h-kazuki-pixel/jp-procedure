@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<title>人の抜き取り</title>
+<style>
+:root { --bg:#fbfbf9; --fg:#1d1d1b; --muted:#5f5f5a; --line:#d9d8d2; --card:#fff; --accent:#1f5f8b; --del-bg:#fbe1dd; --del-fg:#8a1c0f; --ins-bg:#dcefdc; --ins-fg:#145214; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ebebe6; --muted:#a6a69e; --line:#3a3a36; --card:#1f1f1d; --accent:#7fb6dc; --del-bg:#4a1f19; --del-fg:#ffb4a8; --ins-bg:#1c3a1c; --ins-fg:#a9e3a9; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; line-height: 1.7; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.3rem; margin: 0 0 8px; }
+.muted { color: var(--muted); font-size: .9rem; }
+.bar { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; z-index: 1; }
+button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 14px 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.text { white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: .92rem; max-height: 22em; overflow-y: auto; background: var(--bg); }
+del { background: var(--del-bg); color: var(--del-fg); text-decoration: line-through; }
+ins { background: var(--ins-bg); color: var(--ins-fg); text-decoration: underline; }
+.tag { display: inline-block; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: .85rem; }
+fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 10px 0 0; }
+label { margin-right: 14px; white-space: nowrap; }
+textarea { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: var(--bg); color: var(--fg); }
+a { color: var(--accent); }
+@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>人の抜き取り(行政手続LOD の区分を、人が確かめるための一覧)</h1>
+  <p class="muted">区分は機械の判定です(一部は別の AI が決めたもの)。旧い文言と新しい文言を読み、e-Gov の法令のページでも確かめて、区分が「合う/合わない/分からない」を選び、気づいたことをメモに書いてください。付けた結果はこのブラウザの中だけに残ります。「CSV で書き出す」で保存してください。抜き取りの種: <span id="seed"></span></p>
+  <div class="bar"><button id="export">CSV で書き出す</button><span class="muted" id="progress"></span></div>
+  <div id="list"></div>
+</div>
+<script>
+'use strict';
+const DATA = /*DATA*/[];
+const COLS = /*COLS*/[];
+document.getElementById('seed').textContent = /*SEED*/0;
+const KEY = 'jp-procedure-human-check-v1';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { saved = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const CH = ['合う', '合わない', '分からない'];
+document.getElementById('list').innerHTML = DATA.map(r => `<div class="card" id="r${r.n}">
+  <div><strong>${r.n}. ${esc(r.title)}</strong> <span class="muted">手続ID ${esc(r.id)} / ${esc(r.org)}</span></div>
+  <div class="muted">${esc(r.why)}</div>
+  <div>根拠: ${esc(r.law)} ${esc(r.prov)} — <a href="${esc(r.egov)}" target="_blank" rel="noopener noreferrer">e-Gov の法令のページ</a> <span class="tag">${esc(r.kind)}</span></div>
+  ${r.moved ? `<div>移った先: ${esc(r.moved)}</div>` : ''}
+  <div class="cols">
+    <div><div class="muted">旧い文言(2025-11-01)</div><div class="text">${r.old || '(なし)'}</div></div>
+    <div><div class="muted">${r.moved ? '移った先の文言(2026-11-18)' : '新しい文言(2026-11-18)'}</div><div class="text">${r.new || '(なし。この番号は新しい版に無い)'}</div></div>
+  </div>
+  ${r.moved ? `<details><summary class="muted">同じ番号の新しい文言</summary><div class="text">${r.newPlain || '(なし)'}</div></details>` : ''}
+  <fieldset><legend class="muted">区分は</legend>${CH.map(c => `<label><input type="radio" name="j${r.n}" value="${c}" ${saved[r.n]?.j === c ? 'checked' : ''}> ${c}</label>`).join('')}
+    <textarea rows="2" placeholder="メモ" data-n="${r.n}">${esc(saved[r.n]?.m || '')}</textarea></fieldset>
+</div>`).join('');
+const progress = () => { const n = DATA.filter(r => saved[r.n]?.j).length; document.getElementById('progress').textContent = `付けた行 ${n} / ${DATA.length}`; };
+document.getElementById('list').addEventListener('change', ev => {
+  const t = ev.target; if (t.type === 'radio') { const n = t.name.slice(1); saved[n] = { ...(saved[n] || {}), j: t.value }; save(); progress(); } });
+document.getElementById('list').addEventListener('input', ev => {
+  const t = ev.target; if (t.tagName === 'TEXTAREA') { const n = t.dataset.n; saved[n] = { ...(saved[n] || {}), m: t.value }; save(); } });
+progress();
+document.getElementById('export').addEventListener('click', () => {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const lines = [COLS.map(q).join(',')].concat(DATA.map(r => { const row = r.csv.slice(); row[COLS.length - 2] = saved[r.n]?.j || ''; row[COLS.length - 1] = saved[r.n]?.m || ''; return row.map(q).join(','); }));
+  const blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'human-check-result.csv'; document.body.appendChild(a); a.click(); a.remove();
+});
+</script>
+</body>
+</html>

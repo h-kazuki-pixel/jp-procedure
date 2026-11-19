@@ -1,0 +1,8 @@
+# (6) 比べた期間ごとの、改正の記録(根拠の条文の変化)の数と、知らせる手続(根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった))の数。
+# 閲覧ページのはじめの画面の「根拠の条文の変化」「知らせる手続」。毎週の追跡の期間も 1 行ずつ出る。
+SELECT ?start ?end (COUNT(DISTINCT ?ch) AS ?changes) (COUNT(DISTINCT ?ps) AS ?notified) WHERE {
+  ?ch a jpp:ProvisionChange ; dct:temporal ?per ; jpp:affects ?ps .
+  ?per dcat:startDate ?start ; dcat:endDate ?end .
+}
+GROUP BY ?start ?end
+ORDER BY ?start ?end

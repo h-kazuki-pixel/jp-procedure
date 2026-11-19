@@ -1,0 +1,13 @@
+# (7) 比べた期間ごとの、法令の単位で知らせた場合の手続の数。
+# 条以上で照合でき(照合の結果が 条まで・項まで・号まで)、根拠の法令に、その期間に施行期日がある改正(jpp:LawRevision)がある手続。
+# 閲覧ページのはじめの画面の「法令の単位で知らせた場合との差」は、この数 ÷ (6) の知らせる手続。
+SELECT ?start ?end (COUNT(DISTINCT ?ps) AS ?law_level) WHERE {
+  ?per a dct:PeriodOfTime ; dcat:startDate ?start ; dcat:endDate ?end .
+  ?r a jpp:LawRevision ; jpp:revisionOf ?law ; jpp:enforcementDate ?d .
+  FILTER(?d > ?start && ?d <= ?end)
+  ?c jpp:citedLaw ?law ; jpp:matchResult ?m .
+  FILTER(?m IN (<https://w3id.org/jp-procedure/code/match-result/article>, <https://w3id.org/jp-procedure/code/match-result/paragraph>, <https://w3id.org/jp-procedure/code/match-result/item>))
+  ?ps jpp:hasCitation ?c .
+}
+GROUP BY ?start ?end
+ORDER BY ?start ?end

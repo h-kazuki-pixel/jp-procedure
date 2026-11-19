@@ -1,0 +1,9 @@
+# (1) ある条文を根拠にする手続。条の下の項・号を根拠にする手続も含める(eli:is_part_of*)。
+# 法令名と条の名前を変えれば、ほかの条文にも使える。
+SELECT ?id ?title ?provision WHERE {
+  ?law a eli:LegalResource ; rdfs:label "関税法"@ja .
+  ?art eli:is_part_of ?law ; rdfs:label "第62条の15"@ja .
+  ?p eli:is_part_of* ?art ; rdfs:label ?provision .
+  ?ps a cpsv:PublicService ; cv:hasLegalResource ?p ; dct:identifier ?id ; dct:title ?title .
+}
+ORDER BY xsd:integer(?id) ?id

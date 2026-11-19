@@ -1,0 +1,4 @@
+# (5) 手続の数(閲覧ページのはじめの画面の「手続」)。
+SELECT (COUNT(DISTINCT ?ps) AS ?procedures) WHERE {
+  ?ps a cpsv:PublicService .
+}

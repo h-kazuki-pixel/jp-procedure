@@ -1,0 +1,8 @@
+# (2) 比べた期間(2025-11-01〜2026-11-18)に根拠の条・項・号が変わった手続を、区分ごとに数える。
+SELECT ?kind (COUNT(DISTINCT ?ps) AS ?procedures) (COUNT(DISTINCT ?ch) AS ?changes) WHERE {
+  ?ch a jpp:ProvisionChange ; dct:temporal ?per ; jpp:changeKind ?k ; jpp:affects ?ps .
+  ?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date .
+  ?k skos:prefLabel ?kind .
+}
+GROUP BY ?kind
+ORDER BY DESC(?procedures)

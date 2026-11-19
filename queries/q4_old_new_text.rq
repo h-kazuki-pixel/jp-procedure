@@ -1,0 +1,10 @@
+# (4) ある手続の根拠の条文の、旧い文言(2025-11-01)と新しい文言(2026-11-18)。改正の記録があれば区分も出す。
+SELECT ?title ?law ?provision ?asOf ?revision ?kind ?text WHERE {
+  ?ps a cpsv:PublicService ; dct:identifier "119637" ; dct:title ?title ; jpp:hasCitation/jpp:citedProvision ?p .
+  ?p rdfs:label ?provision ; eli:is_part_of+ ?l .
+  ?l a eli:LegalResource ; eli:id_local ?lid ; rdfs:label ?law .
+  ?p eli:is_realized_by ?e .
+  ?e jpp:asOf ?asOf ; jpp:text ?text ; jpp:lawRevision ?revision .
+  OPTIONAL { ?ch jpp:affects ?ps ; jpp:changeKind/skos:prefLabel ?kind . }
+}
+ORDER BY ?asOf

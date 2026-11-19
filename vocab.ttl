@@ -1,0 +1,297 @@
+@prefix cpsv: <http://purl.org/vocab/cpsv#> .
+@prefix cv: <http://data.europa.eu/m8g/> .
+@prefix eli: <http://data.europa.eu/eli/ontology#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix jpp: <https://w3id.org/jp-procedure/def#> .
+
+<https://w3id.org/jp-procedure/def> a owl:Ontology ;
+    rdfs:label "行政手続LOD の独自の語彙"@ja ;
+    rdfs:comment "附則の条は、制定附則(原始附則。e-Gov の本文で AmendLawNum の無い SupplProvision)だけを扱う。改正法の附則(改正附則)は照合の対象にしていない。附則の条の URI は /provision/{法令ID}/suppl-{条}/{項}/{号}、本則は /provision/{法令ID}/{条}/{項}/{号}。条の番号の「の」は「_」。"@ja ;
+    rdfs:comment "手続の dct:description は、調査の項目(手続類型・手続主体・手続の受け手・法令名・根拠条項号)から機械で作った文。元のデータに説明は無い。"@ja ;
+    rdfs:comment "手続の dct:title と cv:hasCompetentAuthority は R7(2025-11-01 時点)の値。年度ごとに変わりうる値は、調査の記録(jpp:SurveyRecord)に残す。"@ja ;
+    rdfs:comment "eli:LegalResourceSubdivision rdfs:subClassOf eli:LegalResource は、ELI の公式のオントロジー(http://data.europa.eu/eli/ontology)の定義を写したもの。SHACL の sh:class がデータの側の下位クラスの定義を見るために置く。"@ja ;
+    rdfs:comment "府省庁の dct:spatial は日本(Geonames https://sws.geonames.org/1861060/)。CPSV-AP 3.2.0 の説明が勧める順(ATU、NUTS・LAU、NAL Place、Geonames)で選んだ。ATU・NUTS・NAL Place には国としての日本が無かった(EU Vocabularies の SPARQL で確かめた)。LAU は確かめていない。"@ja ;
+    rdfs:comment "https://sws.geonames.org/1861060/ に a dct:Location と書いたのは、こちらの言い方。Geonames 自身の RDF での型は gn:Feature。CPSV-AP の SHACL が dct:spatial の先に dct:Location を求めるので書き足した。"@ja .
+<https://w3id.org/jp-procedure/def> rdfs:comment "条・項・号の URI(/provision/{法令ID}/{条}/{項}/{号})は「法令の中の番号で指す位置」を表す。版をまたいで同じ番号なら同じ URI になる。中身(本文)は版(eli:LegalExpression、URI は {条・項・号}/version/{law_revision_id})で持ち、jpp:asOf で確かめた日を付ける。番号の位置の中身が版のあいだで変わったこと(文言の変化、入れ替わり、無くなったこと)は、改正の記録(jpp:ProvisionChange)で表す。改正の記録の移った先・候補として足した条・項・号は 2026-11-18 版の番号で、同じ並びの URI に置く。"@ja .
+eli:LegalResourceSubdivision rdfs:subClassOf eli:LegalResource .
+jpp:SurveyRecord a owl:Class ;
+    rdfs:label "調査の記録(R7 の 1 行)"@ja ;
+    rdfs:subClassOf prov:Entity .
+jpp:LegalCitation a owl:Class ;
+    rdfs:label "根拠条項号の記載と照合の結果"@ja .
+jpp:ProvisionChange a owl:Class ;
+    rdfs:label "改正の記録(根拠の条・項・号 1 つ × 比べた期間 1 つ)"@ja ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:comment "scripts/61_build_changes.py が作る(rdf/changes.ttl.gz)。区分は fix-report-5 の決まり。施行日は 1 つに決めず、期間内のその法令の改正を jpp:lawRevisionInPeriod で結ぶ。"@ja .
+jpp:Review a owl:Class ;
+    rdfs:label "改正の記録の区分を確かめた記録"@ja ;
+    rdfs:comment "1 つの改正の記録に、別の AI(作った Claude Code とは別の会話の Claude)の記録と、人の記録の両方がありうる。どちらも消さずに残す。"@ja .
+jpp:LawRevision a owl:Class ;
+    rdfs:label "法令の改正(e-Gov の改正履歴の 1 版)"@ja ;
+    rdfs:comment "比べた期間に施行期日がある改正は、改正の記録に結んだものだけでなく、このデータにある法令のものをすべて置く(scripts/61_build_changes.py)。根拠の法令に期間内の改正がある手続(法令の単位で知らせた場合の数)を、問いで数えられるようにするため。"@ja .
+jpp:describes a owl:ObjectProperty ;
+    rdfs:label "記録が説明する手続"@ja .
+jpp:hasCitation a owl:ObjectProperty ;
+    rdfs:label "根拠条項号の記載"@ja .
+jpp:citationText a owl:DatatypeProperty ;
+    rdfs:label "原文の根拠条項号(文字のまま)"@ja .
+jpp:citationLawName a owl:DatatypeProperty ;
+    rdfs:label "原文の法令名(文字のまま)"@ja .
+jpp:matchResult a owl:ObjectProperty ;
+    rdfs:label "照合の結果"@ja .
+jpp:lawIdMethod a owl:ObjectProperty ;
+    rdfs:label "法令IDの決め方"@ja .
+jpp:parseRule a owl:ObjectProperty ;
+    rdfs:label "条項号を分けるのに使った型"@ja .
+jpp:citedLaw a owl:ObjectProperty ;
+    rdfs:label "照合した法令"@ja .
+jpp:citedProvision a owl:ObjectProperty ;
+    rdfs:label "照合できた最も深い条・項・号"@ja .
+jpp:sourceRow a owl:DatatypeProperty ;
+    rdfs:label "Excel の行番号(1 始まり、見出し 2 行を含む)"@ja .
+jpp:sourceSheet a owl:DatatypeProperty ;
+    rdfs:label "Excel のシート名"@ja .
+jpp:sha256 a owl:DatatypeProperty ;
+    rdfs:label "ファイルの SHA-256"@ja .
+jpp:level a owl:ObjectProperty ;
+    rdfs:label "条・項・号の別"@ja .
+jpp:text a owl:DatatypeProperty ;
+    rdfs:label "本文(e-Gov の本文から。ルビの読みは除く)"@ja .
+jpp:asOf a owl:DatatypeProperty ;
+    rdfs:label "この版が施行されていた時点として確かめた日"@ja .
+jpp:lawRevision a owl:DatatypeProperty ;
+    rdfs:label "e-Gov の版の ID(law_revision_id)"@ja .
+jpp:checkedRevision a owl:DatatypeProperty ;
+    rdfs:label "照合に使った版(law_revision_id、asof=2025-11-01)"@ja .
+jpp:provision a owl:ObjectProperty ;
+    rdfs:label "改正の記録が見た根拠の条・項・号"@ja .
+jpp:changeKind a owl:ObjectProperty ;
+    rdfs:label "改正の記録の区分"@ja .
+jpp:oldVersion a owl:ObjectProperty ;
+    rdfs:label "比べた旧い版"@ja .
+jpp:newVersion a owl:ObjectProperty ;
+    rdfs:label "比べた新しい版(あれば)"@ja .
+jpp:movedTo a owl:ObjectProperty ;
+    rdfs:label "移った先の条・項・号"@ja .
+jpp:candidate a owl:ObjectProperty ;
+    rdfs:label "移った先の候補(一つに決まらないとき、すべて)"@ja .
+jpp:r0 a owl:DatatypeProperty ;
+    rdfs:label "同じ番号の旧・新の近さ(条名・項番号・号名を除く)"@ja .
+jpp:r1 a owl:DatatypeProperty ;
+    rdfs:label "別の番号で最も近いものの近さ(同じ測り方)"@ja .
+jpp:affects a owl:ObjectProperty ;
+    rdfs:label "この改正の記録の条・項・号を根拠にする手続"@ja .
+jpp:lawRevisionInPeriod a owl:ObjectProperty ;
+    rdfs:label "比べた期間に施行されたその法令の改正(改正履歴にあるもの)"@ja .
+jpp:revisionOf a owl:ObjectProperty ;
+    rdfs:label "改正された法令"@ja .
+jpp:enforcementDate a owl:DatatypeProperty ;
+    rdfs:label "改正の施行期日(改正履歴の amendment_enforcement_date)"@ja .
+jpp:amendmentLawNum a owl:DatatypeProperty ;
+    rdfs:label "改正法令の番号"@ja .
+jpp:review a owl:ObjectProperty ;
+    rdfs:label "改正の記録の区分を確かめた記録(jpp:Review)"@ja .
+jpp:reviewerType a owl:ObjectProperty ;
+    rdfs:label "確かめた者の種類(コード表 code/reviewer-type: 別の AI・人)"@ja .
+jpp:reviewDate a owl:DatatypeProperty ;
+    rdfs:label "確かめた日"@ja .
+jpp:reviewResult a owl:ObjectProperty ;
+    rdfs:label "確かめた結果(コード表 code/review-result: 区分を決めた・合う・合わない・分からない)"@ja .
+jpp:reviewReason a owl:DatatypeProperty ;
+    rdfs:label "区分を決めたときの理由"@ja .
+jpp:reviewNote a owl:DatatypeProperty ;
+    rdfs:label "確かめたときのメモ"@ja .
+jpp:reviewSampling a owl:DatatypeProperty ;
+    rdfs:label "どの抜き取りで確かめたか"@ja .
+jpp:r7-c01 a owl:DatatypeProperty ;
+    rdfs:label "手続ID"@ja ;
+    rdfs:comment "R7 調査結果の 1 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c02 a owl:ObjectProperty ;
+    rdfs:label "所管府省庁"@ja ;
+    rdfs:comment "R7 調査結果の 2 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c03 a owl:DatatypeProperty ;
+    rdfs:label "手続名"@ja ;
+    rdfs:comment "R7 調査結果の 3 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c04 a owl:DatatypeProperty ;
+    rdfs:label "法令名"@ja ;
+    rdfs:comment "R7 調査結果の 4 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c05 a owl:DatatypeProperty ;
+    rdfs:label "根拠条項号"@ja ;
+    rdfs:comment "R7 調査結果の 5 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c06 a owl:DatatypeProperty ;
+    rdfs:label "関連条項号"@ja ;
+    rdfs:comment "R7 調査結果の 6 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c07 a owl:DatatypeProperty ;
+    rdfs:label "関連する根拠法令"@ja ;
+    rdfs:comment "R7 調査結果の 7 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c08 a owl:ObjectProperty ;
+    rdfs:label "手続類型"@ja ;
+    rdfs:comment "R7 調査結果の 8 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c09 a owl:DatatypeProperty ;
+    rdfs:label "手続主体"@ja ;
+    rdfs:comment "R7 調査結果の 9 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c10 a owl:DatatypeProperty ;
+    rdfs:label "手続の受け手"@ja ;
+    rdfs:comment "R7 調査結果の 10 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c11 a owl:DatatypeProperty ;
+    rdfs:label "手続(類型、主体、受け手等)に関する補足"@ja ;
+    rdfs:comment "R7 調査結果の 11 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c12 a owl:DatatypeProperty ;
+    rdfs:label "経由機関"@ja ;
+    rdfs:comment "R7 調査結果の 12 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c13 a owl:DatatypeProperty ;
+    rdfs:label "独立行政法人等の名称"@ja ;
+    rdfs:comment "R7 調査結果の 13 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c14 a owl:DatatypeProperty ;
+    rdfs:label "事務区分"@ja ;
+    rdfs:comment "R7 調査結果の 14 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c15 a owl:DatatypeProperty ;
+    rdfs:label "府省共通手続"@ja ;
+    rdfs:comment "R7 調査結果の 15 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c16 a owl:DatatypeProperty ;
+    rdfs:label "実施府省庁"@ja ;
+    rdfs:comment "R7 調査結果の 16 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c17 a owl:DatatypeProperty ;
+    rdfs:label "実施府省庁(府省共通手続)"@ja ;
+    rdfs:comment "R7 調査結果の 17 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c18 a owl:DatatypeProperty ;
+    rdfs:label "オンライン化の実施状況"@ja ;
+    rdfs:comment "R7 調査結果の 18 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c19 a owl:DatatypeProperty ;
+    rdfs:label "オンライン化の実施予定及び検討時の懸念点"@ja ;
+    rdfs:comment "R7 調査結果の 19 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c20 a owl:DatatypeProperty ;
+    rdfs:label "オンライン化の実施状況に関する補足"@ja ;
+    rdfs:comment "R7 調査結果の 20 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c21 a owl:DatatypeProperty ;
+    rdfs:label "オンライン化実施時期"@ja ;
+    rdfs:comment "R7 調査結果の 21 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c22 a owl:DatatypeProperty ;
+    rdfs:label "申請等における本人確認手法"@ja ;
+    rdfs:comment "R7 調査結果の 22 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c23 a owl:DatatypeProperty ;
+    rdfs:label "手数料等の納付有無"@ja ;
+    rdfs:comment "R7 調査結果の 23 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c24 a owl:DatatypeProperty ;
+    rdfs:label "手数料等の納付方法"@ja ;
+    rdfs:comment "R7 調査結果の 24 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c25 a owl:DatatypeProperty ;
+    rdfs:label "手数料等に関する補足"@ja ;
+    rdfs:comment "R7 調査結果の 25 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c26 a owl:DatatypeProperty ;
+    rdfs:label "手数料等のオンライン納付時の優遇措置"@ja ;
+    rdfs:comment "R7 調査結果の 26 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c27 a owl:DatatypeProperty ;
+    rdfs:label "処理期間(オンライン)"@ja ;
+    rdfs:comment "R7 調査結果の 27 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c28 a owl:DatatypeProperty ;
+    rdfs:label "処理期間(非オンライン)"@ja ;
+    rdfs:comment "R7 調査結果の 28 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c29 a owl:DatatypeProperty ;
+    rdfs:label "情報システム(申請)"@ja ;
+    rdfs:comment "R7 調査結果の 29 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c30 a owl:DatatypeProperty ;
+    rdfs:label "情報システム（申請）複数ある場合"@ja ;
+    rdfs:comment "R7 調査結果の 30 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c31 a owl:DatatypeProperty ;
+    rdfs:label "情報システム(事務処理)"@ja ;
+    rdfs:comment "R7 調査結果の 31 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c32 a owl:DatatypeProperty ;
+    rdfs:label "総手続件数"@ja ;
+    rdfs:comment "R7 調査結果の 32 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c33 a owl:DatatypeProperty ;
+    rdfs:label "オンライン手続件数"@ja ;
+    rdfs:comment "R7 調査結果の 33 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c34 a owl:DatatypeProperty ;
+    rdfs:label "非オンライン手続件数"@ja ;
+    rdfs:comment "R7 調査結果の 34 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c35 a owl:DatatypeProperty ;
+    rdfs:label "申請書等に記載させる情報"@ja ;
+    rdfs:comment "R7 調査結果の 35 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c36 a owl:DatatypeProperty ;
+    rdfs:label "申請時に添付させる書類"@ja ;
+    rdfs:comment "R7 調査結果の 36 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c37 a owl:DatatypeProperty ;
+    rdfs:label "添付書類等提出の撤廃/省略状況"@ja ;
+    rdfs:comment "R7 調査結果の 37 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c38 a owl:DatatypeProperty ;
+    rdfs:label "添付書類等の提出方法"@ja ;
+    rdfs:comment "R7 調査結果の 38 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c39 a owl:DatatypeProperty ;
+    rdfs:label "添付書類等への電子署名"@ja ;
+    rdfs:comment "R7 調査結果の 39 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c40 a owl:DatatypeProperty ;
+    rdfs:label "添付形式等が定められた規定"@ja ;
+    rdfs:comment "R7 調査結果の 40 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c41 a owl:DatatypeProperty ;
+    rdfs:label "添付書類等に関する補足"@ja ;
+    rdfs:comment "R7 調査結果の 41 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c42 a owl:DatatypeProperty ;
+    rdfs:label "手続が行われるイベント(個人)"@ja ;
+    rdfs:comment "R7 調査結果の 42 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c43 a owl:DatatypeProperty ;
+    rdfs:label "手続が行われるイベント(法人)"@ja ;
+    rdfs:comment "R7 調査結果の 43 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c44 a owl:DatatypeProperty ;
+    rdfs:label "申請に関連する士業"@ja ;
+    rdfs:comment "R7 調査結果の 44 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c45 a owl:DatatypeProperty ;
+    rdfs:label "申請を提出する機関"@ja ;
+    rdfs:comment "R7 調査結果の 45 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:r7-c46 a owl:DatatypeProperty ;
+    rdfs:label "士業、機関に関する補足"@ja ;
+    rdfs:comment "R7 調査結果の 46 列目"@ja ;
+    rdfs:domain jpp:SurveyRecord .
+jpp:lawRevision rdfs:comment "値は e-Gov の法令履歴ID で、{法令ID}_{YYYYMMDD}_{改正法令の法令ID} の形。YYYYMMDD は施行期日で、eli:version_date にも同じ日付を入れた。改正法令の部分が 000000000000000 の版(このデータで 1,360、scripts/66_check_versions.py)は、e-Gov の説明では初めの版か基準日の版で、その日付が施行期日か基準日かを、このデータでは見分けていない。"@ja .
+jpp:SurveyRecord rdfs:comment "元のデータ(デジタル庁の調査結果)から変えた点: 自由記述の列にあった個人の連絡先(個人の氏名・個人あての電話番号・メールアドレス)は「(個人の連絡先のため伏せた)」に置き換えた。部署の名前や代表の窓口は残した。伏せた所の一覧(手続ID・列・位置。中身は書かない)は data/redactions.csv。人名は機械で拾いきれず残りうるので、見つけたら Issue で知らせてほしい。"@ja .

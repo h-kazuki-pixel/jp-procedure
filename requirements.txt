@@ -1,0 +1,6 @@
+# 作り直しに使ったもの(毎週の追跡 scripts/70_weekly_track.py は標準ライブラリだけで動く)
+pandas==2.3.3
+openpyxl==3.1.5
+rdflib==7.6.0
+pyshacl==0.40.2
+pyoxigraph==0.5.13

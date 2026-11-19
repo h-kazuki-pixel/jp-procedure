@@ -1,0 +1,13 @@
+# (3) 所管府省庁ごとの、(2) の件数(根拠の条・項・号が変わった手続の数)と、その府省庁の手続の数に対する割合。
+SELECT ?ministry (COUNT(DISTINCT ?ps) AS ?procedures) (COUNT(DISTINCT ?chps) AS ?changed)
+       (ROUND(COUNT(DISTINCT ?chps) * 10000 / COUNT(DISTINCT ?ps)) / 100 AS ?percent) WHERE {
+  ?ps a cpsv:PublicService ; cv:hasCompetentAuthority ?org .
+  ?org skos:prefLabel ?ministry .
+  OPTIONAL {
+    ?ch a jpp:ProvisionChange ; jpp:affects ?ps ; dct:temporal ?per .
+    ?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date .
+    BIND(?ps AS ?chps)
+  }
+}
+GROUP BY ?ministry
+ORDER BY DESC(?changed)

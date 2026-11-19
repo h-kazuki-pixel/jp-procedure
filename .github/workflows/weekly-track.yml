@@ -1,0 +1,167 @@
+# 毎週の追跡(まだ動かしていない)。
+# 1. e-Gov 法令API v2 の一括ダウンロード(更新データ、過去 7 日)で更新された法令と、施行日が来た改正のある法令のうち、
+#    このデータが根拠に使う法令だけ本文を取り直し、根拠の条・項・号を比べて、改正の記録を data/rdf/weekly/ に足す。
+#    期間内に施行期日がある改正(このデータの法令のもの)は、改正の記録が 0 件の週でも data/rdf/weekly/ に置く。
+# 2. データが増えた週(改正の記録か期間内の改正が 1 件以上)は、自作 SHACL・公式 CPSV-AP SHACL・全体の数の確かめを通し、
+#    閲覧ページのはじめの画面の数を queries/ の問いで出して stats.json に書く(全体の数の確かめと比べる)。
+#    すべて通ったときだけ main に入れ、その週の差分を Release に出す。通らなければ入れずに Issue を立てる。
+#    記録が 0 件の週は確かめを回さず、Release も出さない。
+# 2b. 毎週、最後に確かめた日とその週の結果(足した記録の件数。0 件を含む)を status.json に書き、README の行を書き直して main に入れる。
+# 3. 記録を足して main に入れたら、作り直したデータで Cloud Run の SPARQL を入れ替える(vars.DEPLOY_ENABLED が 'true' のときだけ)。
+#    手で「Run workflow」を選び deploy_only に印を付けると、追跡はせず、入れ替えだけを試せる(deploy.md の手順 9)。
+# 4. 2 週続けて失敗したら Issue を立てる。
+name: weekly-track
+on:
+  schedule:
+    - cron: '0 21 * * 0'   # 毎週月曜 06:00(日本時間)
+  workflow_dispatch:
+    inputs:
+      deploy_only:
+        description: '追跡はせず、今の main のデータで Cloud Run の入れ替えだけを試す(DEPLOY_ENABLED が true のときだけ動く)'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: weekly-track
+  cancel-in-progress: false
+env:
+  CPSV_SHACL_URL: https://semiceu.github.io/CPSV-AP/releases/3.2.0/shacl/cpsv-ap-SHACL.ttl
+jobs:
+  track:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.deploy_only) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    outputs:
+      records: ${{ steps.track.outputs.records }}
+      revisions: ${{ steps.track.outputs.revisions }}
+      end: ${{ steps.track.outputs.end }}
+      pushed: ${{ steps.push.outputs.pushed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: e-Gov の取得結果を残す
+        uses: actions/cache@v4
+        with:
+          path: data/api/cache
+          key: egov-${{ github.run_id }}
+          restore-keys: egov-
+      - name: 追跡
+        id: track
+        env:
+          EGOV_UA: jp-procedure-tracker (+https://github.com/${{ github.repository }})
+        run: |
+          python3 scripts/70_weekly_track.py --days 7
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json; r = json.load(open('data/tracking/last_run.json'))
+          print(f"records={r['records']}"); print(f"revisions={r.get('revisions', 0)}"); print(f"end={r['period'][1]}")
+          EOF
+      - name: 確かめ(自作 SHACL・公式 CPSV-AP SHACL・全体の数)と、はじめの画面の数(stats.json)
+        id: checks
+        if: steps.track.outputs.records != '0' || steps.track.outputs.revisions != '0'
+        env:
+          RDF_DIR: data/rdf
+          SHAPES: shapes/shapes.ttl
+          CPSV_SHACL: data/vocab/cpsv-ap-3.2.0-SHACL.ttl
+          PYTHON: python3
+        run: |
+          set -o pipefail
+          pip install rdflib==7.6.0 pyshacl==0.40.2 pyoxigraph==0.5.13
+          mkdir -p data/vocab out && curl -fsSL "$CPSV_SHACL_URL" -o "$CPSV_SHACL"
+          python3 scripts/56_split_for_shacl.py full
+          python3 scripts/59_shacl_split.py full | tee out/59_shacl_full.txt
+          STORE=store/oxigraph python3 scripts/62_oxigraph_load.py
+          python3 scripts/75_make_stats.py store/oxigraph stats.json data/rdf
+          python3 scripts/82_make_changed_list.py store/oxigraph changed.json
+          python3 scripts/83_write_readme_numbers.py store/oxigraph .
+          STATS=stats.json README=README.md python3 scripts/57_count_checks.py | tee out/57_count_checks.txt
+      - name: 確かめが通らなかったら Issue を立てる(main には入れない)
+        if: failure() && steps.checks.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create weekly-check-failure -R "$GITHUB_REPOSITORY" --color D93F0B --force
+          gh issue create -R "$GITHUB_REPOSITORY" --label weekly-check-failure \
+            --title "毎週の追跡: 確かめが通らなかった(${{ steps.track.outputs.end }})" \
+            --body "足した改正の記録 ${{ steps.track.outputs.records }} 件の確かめが通らなかったので、main には入れていません。実行: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: status.json と README の行を書く(0 件の週も)
+        run: python3 scripts/74_write_status.py --checks ${{ steps.checks.outcome == 'success' && 'success' || 'skipped' }}
+      - name: main に入れる
+        id: push
+        run: |
+          if [ -z "$(git status --porcelain data/rdf data/tracking status.json stats.json changed.json README.md)" ]; then echo "変更なし"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/rdf data/tracking/state.json data/tracking/law_revisions.csv.gz data/tracking/last_run.json status.json stats.json changed.json README.md
+          git commit -m "毎週の追跡: ${{ steps.track.outputs.end }} まで確かめた(改正の記録 ${{ steps.track.outputs.records }} 件)"
+          git push
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+      - name: その週の差分を Release に出す
+        if: steps.push.outputs.pushed == 'true' && steps.track.outputs.records != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          END=${{ steps.track.outputs.end }}
+          gh release create "weekly-$END" data/rdf/weekly/changes_*_"$END".ttl.gz data/tracking/last_run.json \
+            -R "$GITHUB_REPOSITORY" --target main --title "毎週の追跡 $END" \
+            --notes "この週に足した改正の記録: ${{ steps.track.outputs.records }} 件。自作 SHACL・公式 CPSV-AP SHACL・全体の数の確かめを通した。"
+  deploy:
+    needs: track
+    # 毎週: データ(改正の記録か期間内の改正)を足して main に入れたときだけ。手で deploy_only を選んだとき: 追跡を飛ばして入れ替えだけ
+    if: >-
+      ${{ always() && vars.DEPLOY_ENABLED == 'true' && (
+        (needs.track.result == 'success' && needs.track.outputs.pushed == 'true' && (needs.track.outputs.records != '0' || needs.track.outputs.revisions != '0')) ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy_only) ) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: イメージを作り直して Cloud Run を入れ替える
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          TAG: ${{ needs.track.outputs.end || format('manual-{0}', github.run_id) }}
+        run: |
+          IMAGE=asia-northeast1-docker.pkg.dev/$PROJECT/jp-procedure/sparql
+          # build は入れ替え用のアカウント自身として動かす(既定のアカウントはプロジェクトの Editor を持つので使わない)。
+          # 送る置き場所は専用のバケット(7 日で消える)。ログは Cloud Logging だけに書き、ここでは流さない。
+          gcloud builds submit --project "$PROJECT" --region asia-northeast1 --config deploy/cloudbuild.yaml \
+            --service-account "projects/$PROJECT/serviceAccounts/jp-procedure-deployer@$PROJECT.iam.gserviceaccount.com" \
+            --gcs-source-staging-dir "gs://jp-procedure-build-source/source" --suppress-logs \
+            --substitutions _IMAGE=$IMAGE,_TAG=$TAG .
+          # 認証の形(--allow / --no-allow-unauthenticated)はここでは変えない。公開の日に変えた形を毎週の入れ替えで戻さないため。
+          # 入れ替え用のアカウントには呼び出しの IAM を変える権限が無い。
+          gcloud run deploy jp-procedure-sparql --project "$PROJECT" --image "$IMAGE:$TAG" --region asia-northeast1 \
+            --service-account "jp-procedure-sparql-run@$PROJECT.iam.gserviceaccount.com" \
+            --port 8080 --cpu 1 --memory 1Gi --min-instances 0 --max-instances 1 --timeout 30
+  notify:
+    needs: [track, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 2 週続けて失敗したら Issue を立てる
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list -R "$GITHUB_REPOSITORY" --workflow weekly-track.yml --limit 5 --json databaseId,conclusion,status \
+                 --jq "[.[] | select(.databaseId != ${GITHUB_RUN_ID} and .status == \"completed\")][0].conclusion")
+          echo "前回: ${prev}"
+          if [ "$prev" != "failure" ]; then exit 0; fi
+          gh label create weekly-track-failure -R "$GITHUB_REPOSITORY" --color B60205 --force
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label weekly-track-failure --state open --json number --jq length)
+          if [ "$open" != "0" ]; then echo "すでに開いた Issue がある"; exit 0; fi
+          gh issue create -R "$GITHUB_REPOSITORY" --label weekly-track-failure \
+            --title "毎週の追跡が 2 週続けて失敗した" \
+            --body "毎週の追跡(weekly-track)が 2 回続けて失敗しました。今回の実行: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

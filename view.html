@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<!-- 外のスクリプト・書体・画像は読み込まない。読むのは SPARQL の行き先と、同じ場所の status.json・queries/ だけ -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src *; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<title>行政手続LOD 閲覧</title>
+<style>
+:root {
+  --bg: #fbfbf9; --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d8d2; --card: #ffffff;
+  --accent: #1f5f8b; --del-bg: #fbe1dd; --del-fg: #8a1c0f; --ins-bg: #dcefdc; --ins-fg: #145214; --warn: #7a5200; --warn-bg: #fff4d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161615; --fg: #ebebe6; --muted: #a6a69e; --line: #3a3a36; --card: #1f1f1d;
+          --accent: #7fb6dc; --del-bg: #4a1f19; --del-fg: #ffb4a8; --ins-bg: #1c3a1c; --ins-fg: #a9e3a9; --warn: #ffd27a; --warn-bg: #3a2f12; }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; line-height: 1.7; }
+a { color: var(--accent); }
+header { border-bottom: 1px solid var(--line); background: var(--card); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; padding-top: 10px; padding-bottom: 10px; }
+header .brand { font-weight: 700; text-decoration: none; color: var(--fg); }
+nav a { margin-right: 14px; white-space: nowrap; }
+main { padding-top: 16px; padding-bottom: 48px; }
+h1 { font-size: 1.45rem; line-height: 1.4; margin: 8px 0 12px; }
+h2 { font-size: 1.15rem; margin: 28px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1rem; margin: 18px 0 6px; }
+.lead { font-size: 1.05rem; }
+.muted { color: var(--muted); font-size: .92rem; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.stat .num { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.3; }
+.stat .lab { font-size: .9rem; }
+.stat .sub { font-size: .8rem; color: var(--muted); }
+.stat a.q { white-space: nowrap; }
+form.search { display: grid; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+form.search .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+input[type=text], textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); min-width: 0; }
+input[type=text] { flex: 1 1 220px; }
+textarea { width: 100%; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: .85rem; line-height: 1.5; }
+button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
+button.secondary { background: transparent; color: var(--accent); }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); white-space: nowrap; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; }
+.tag { display: inline-block; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); font-size: .85rem; white-space: nowrap; }
+.note { background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 8px 12px; font-size: .9rem; margin: 10px 0; }
+.err { background: var(--del-bg); color: var(--del-fg); border-radius: 6px; padding: 8px 12px; }
+.change { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 12px 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.text { white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: .92rem; max-height: 28em; overflow-y: auto; }
+del { background: var(--del-bg); color: var(--del-fg); text-decoration: line-through; text-decoration-thickness: 1px; }
+ins { background: var(--ins-bg); color: var(--ins-fg); text-decoration: underline; text-decoration-thickness: 1px; }
+.legend del, .legend ins { padding: 0 4px; }
+.loading { color: var(--muted); }
+.bar { height: .6em; background: var(--accent); border-radius: 3px; display: inline-block; vertical-align: middle; }
+.headline { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 16px; margin: 16px 0 8px; font-size: 1.05rem; }
+.headline strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 8px 0 16px; }
+.door { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; text-decoration: none; color: var(--fg); }
+.door strong { display: block; color: var(--accent); }
+.door span { font-size: .88rem; color: var(--muted); }
+.example { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; text-decoration: none; color: var(--fg); }
+.example .snip { display: block; font-size: 1.05rem; margin: 6px 0; word-break: break-all; }
+.example span { display: block; }
+select { font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); max-width: 100%; min-width: 0; flex: 1 1 160px; }
+form.search .row > * { max-width: 100%; }
+.fld { display: flex; align-items: center; gap: 6px; flex: 1 1 240px; min-width: 0; }
+.fld label { white-space: nowrap; }
+.fld select, .fld input { flex: 1 1 auto; min-width: 0; width: 100%; }
+.snip2 { font-size: .88rem; word-break: break-all; min-width: 12em; }
+.pager { display: flex; gap: 12px; align-items: center; }
+footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85rem; color: var(--muted); }
+@media (max-width: 760px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .doors { grid-template-columns: 1fr; }
+  .cols { grid-template-columns: 1fr; }
+  dl.kv { grid-template-columns: 1fr; gap: 0; }
+  dl.kv dd { margin-bottom: 8px; }
+  h1 { font-size: 1.25rem; }
+  table.stack thead { display: none; }
+  table.stack tr { display: block; border-bottom: 1px solid var(--line); padding: 6px 0; }
+  table.stack td { display: block; border: 0; padding: 2px 4px; }
+  table.stack td.n { text-align: left; }
+  table.stack td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); }
+}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="#/">行政手続LOD</a>
+  <nav><a href="#/">はじめ</a><a href="#/changed">変わった手続</a><a href="#/search">探す</a><a href="#/ministries">府省庁ごと</a><a href="#/queries">問いを試す</a></nav>
+</div></header>
+<main class="wrap" id="app"><p class="loading">読み込んでいます…</p></main>
+<footer><div class="wrap">
+  読むだけのページです。利用者の記録や解析のタグは入れていません。データは CC BY 4.0、出典はデジタル庁「行政手続等の棚卸調査結果」と e-Gov 法令検索(加工して作成)。国・デジタル庁が作ったものではありません。
+  <span id="ft-endpoint"></span>
+</div></footer>
+<script>
+'use strict';
+// ===== 設定(ここだけを変える) =====
+const CONFIG = {
+  // SPARQL の行き先。手元では `oxigraph serve-read-only --location <店> --bind 127.0.0.1:7878 --cors`
+  endpoint: 'http://127.0.0.1:7878/query',
+  base: 'https://w3id.org/jp-procedure/',                         // データの URI の基点
+  period: { start: '2025-11-01', end: '2026-11-18' },             // 初めに比べた期間(数と文言の並べの基準)
+  status: 'status.json',                                          // 毎週の追跡の結果(同じ場所)
+  stats: 'stats.json',
+  changed: 'changed.json',                                        // 変わった手続の一覧と違う所の抜き出し(データを作るときに作る)                                            // はじめの画面の数(データを作るときに queries/ の問いで出したもの)
+  queries: 'queries/',                                            // 問いの例(同じ場所)
+  queryFiles: [
+    ['q1_procedures_by_provision.rq', 'ある条文(関税法 第62条の15)を根拠にする手続'],
+    ['q2_changed_by_kind.rq', '期間内に根拠の条・項・号が変わった手続を、区分ごとに数える'],
+    ['q3_changed_by_ministry.rq', '所管府省庁ごとの、変わった手続の数と割合'],
+    ['q4_old_new_text.rq', 'ある手続(手続ID 119637)の根拠の条文の、旧い文言と新しい文言'],
+    ['q5_count_procedures.rq', '手続の数(はじめの画面の「手続」)'],
+    ['q6_changes_by_period.rq', '期間ごとの、改正の記録と知らせる手続の数(はじめの画面)'],
+    ['q7_law_level_by_period.rq', '期間ごとの、法令の単位で知らせた場合の手続の数(はじめの画面。少し時間がかかる)'],
+  ],
+  example: '119637',                                              // はじめの画面の例に出す手続
+  repo: 'https://github.com/h-kazuki-pixel/jp-procedure',          // 判定のやり方などの文書の置き場所
+};
+// ===== ここまで =====
+
+const B = CONFIG.base;
+const METHOD = CONFIG.repo + '/blob/main/reports/fix-report-5.md';
+const P = `PREFIX cpsv: <http://purl.org/vocab/cpsv#>
+PREFIX cv: <http://data.europa.eu/m8g/>
+PREFIX eli: <http://data.europa.eu/eli/ontology#>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX dcat: <http://www.w3.org/ns/dcat#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX jpp: <${B}def#>
+`;
+const $app = document.getElementById('app');
+let changedCache = null;   // changed.json(はじめの画面の例と、変わった手続の一覧で使う)
+document.getElementById('ft-endpoint').textContent = ' SPARQL の行き先: ' + CONFIG.endpoint;
+
+// ---- 小さな道具 ----
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = n => Number(n).toLocaleString('ja-JP');
+const lit = s => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+const iri = u => '<' + String(u).replace(/[<>"{}|^`\\\s]/g, '') + '>';
+const D = d => `"${d}"^^xsd:date`;
+const PS = `?per dcat:startDate ${D(CONFIG.period.start)} ; dcat:endDate ${D(CONFIG.period.end)} .`;
+let seq = 0;   // 画面を移ったあとに古い答えで描かないため
+
+async function sparql(q) {
+  const body = new URLSearchParams({ query: P + q });
+  let r;
+  try {
+    r = await fetch(CONFIG.endpoint, { method: 'POST', body, headers: { Accept: 'application/sparql-results+json' } });
+  } catch (e) {
+    throw offlineError();
+  }
+  if (r.status === 401 || r.status === 403) throw offlineError();   // 公開の前の Cloud Run は認証つきなので、ブラウザからは 403 になる
+  if (!r.ok) throw new Error('SPARQL の答えが ' + r.status + ': ' + (await r.text()).slice(0, 300));
+  const j = await r.json();
+  if ('boolean' in j) return j.boolean;
+  return j.results.bindings.map(b => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, v.value])));
+}
+function route(u) {   // データの URI → このページの中の行き先
+  if (!u || !u.startsWith(B)) return null;
+  const p = u.slice(B.length);
+  if (/^(procedure|provision|law|change)\//.test(p)) return '#/' + p;
+  return null;
+}
+function link(u, text) {
+  const r = route(u);
+  return r ? `<a href="${esc(r)}">${esc(text ?? u)}</a>` : (/^https?:/.test(u) ? `<a href="${esc(u)}" rel="noopener">${esc(text ?? u)}</a>` : esc(text ?? u));
+}
+function egov(lawId) { return `https://laws.e-gov.go.jp/law/${encodeURIComponent(lawId)}`; }
+function show(html) { $app.innerHTML = html; }
+// SPARQL の行き先に問い合わせられないとき(公開の前など)は、エラーでなく「準備中」と出す
+const OFFLINE = 'SPARQL サーバーは公開の準備中です。データのファイル(data/)は使えます。';
+function offlineError() { const e = new Error(OFFLINE); e.offline = true; return e; }
+function errBox(e) {
+  if (e && e.offline) return `<div class="note offline">${esc(OFFLINE)} <a href="${esc(CONFIG.repo)}#ファイル" rel="noopener">データのファイル</a>・<a href="#/changed">変わった手続の一覧</a>・<a href="#/">はじめ</a></div>`;
+  return `<div class="err">${esc(e && e.message || e)}</div>`;
+}
+function fail(e) { show(errBox(e)); }
+const loading = t => `<p class="loading">${esc(t || '読み込んでいます…')}</p>`;
+const lawIdOf = u => (u.match(/\/(?:law|provision|change)\/([^/]+)/) || [])[1];
+
+// ---- 文言の違い(文字の単位。長すぎるときは文の単位) ----
+function diffSeq(a, b) {
+  let s = 0; while (s < a.length && s < b.length && a[s] === b[s]) s++;
+  let e = 0; while (e < a.length - s && e < b.length - s && a[a.length - 1 - e] === b[b.length - 1 - e]) e++;
+  const A = a.slice(s, a.length - e), Bq = b.slice(s, b.length - e), n = A.length, m = Bq.length;
+  const ops = [];
+  if (s) ops.push(['=', a.slice(0, s)]);
+  if (n * m > 4e6) { if (n) ops.push(['-', A]); if (m) ops.push(['+', Bq]); }
+  else if (n && m) {
+    const W = m + 1, L = new Uint16Array((n + 1) * W);
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+      L[i * W + j] = A[i] === Bq[j] ? L[(i + 1) * W + j + 1] + 1 : Math.max(L[(i + 1) * W + j], L[i * W + j + 1]);
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (A[i] === Bq[j]) { ops.push(['=', [A[i]]]); i++; j++; }
+      else if (L[(i + 1) * W + j] >= L[i * W + j + 1]) { ops.push(['-', [A[i]]]); i++; }
+      else { ops.push(['+', [Bq[j]]]); j++; }
+    }
+    if (i < n) ops.push(['-', A.slice(i)]); if (j < m) ops.push(['+', Bq.slice(j)]);
+  } else { if (n) ops.push(['-', A]); if (m) ops.push(['+', Bq]); }
+  if (e) ops.push(['=', a.slice(a.length - e)]);
+  const out = [];   // 同じ印の続きをまとめる
+  for (const [t, x] of ops) { if (out.length && out[out.length - 1][0] === t) out[out.length - 1][1] = out[out.length - 1][1].concat(x); else out.push([t, x.slice ? x.slice() : x]); }
+  return out;
+}
+function diffText(a, b) {
+  const ca = Array.from(a), cb = Array.from(b);
+  let ops;
+  const s0 = (() => { let s = 0; while (s < ca.length && s < cb.length && ca[s] === cb[s]) s++; return s; })();
+  if ((ca.length - s0) * (cb.length - s0) <= 4e6) ops = diffSeq(ca, cb).map(([t, x]) => [t, x.join('')]);
+  else {   // 文(。)の単位で比べる
+    const sp = t => t.match(/[^。]*。|[^。]+$/g) || [];
+    ops = diffSeq(sp(a), sp(b)).map(([t, x]) => [t, x.join('')]);
+  }
+  let left = '', right = '';
+  for (const [t, x] of ops) {
+    if (t === '=') { left += esc(x); right += esc(x); }
+    else if (t === '-') left += `<del>${esc(x)}</del>`;
+    else right += `<ins>${esc(x)}</ins>`;
+  }
+  return [left, right];
+}
+
+// ---- はじめ ----
+async function pageHome(my) {
+  show(`<h1>法令が改正されたとき、根拠の条文が本当に変わった手続だけが分かります</h1>
+  <p class="lead">国の行政手続と、その根拠の条・項・号を結び、比べた期間(${esc(CONFIG.period.start)}〜${esc(CONFIG.period.end)})に根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)を探せるようにしたページです。</p>
+  <div id="stats">${loading('数を読み込んでいます…')}</div>
+  <h2>例</h2>
+  <div id="example">${loading('例を読み込んでいます…')}</div>
+  <h2>入口</h2>
+  <div class="doors">
+    <a class="door" href="#/changed"><strong>変わった手続の一覧</strong><span>区分・府省庁で絞れる</span></a>
+    <a class="door" href="#/ministries"><strong>府省庁ごと</strong><span>手続の数と、変わった手続の数・割合</span></a>
+    <a class="door" href="#/search"><strong>条文から探す</strong><span>法令名と条の番号から、その条文を根拠にする手続へ</span></a>
+  </div>
+  ${searchForm('', '', '')}
+  <p class="muted" id="status">最後に確かめた日: 読み込んでいます…</p>
+  <p class="muted">区分は、文言を機械で比べて決めたものです(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。手続の中身が変わるかどうかは判断していません。</p>`);
+  bindSearch();
+  fetch(CONFIG.status, { cache: 'no-cache' }).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(st => {
+    if (my !== seq) return;
+    const w = (st.weeks || []).slice(-1)[0];
+    document.getElementById('status').innerHTML = `最後に確かめた日: <strong>${esc(st.last_checked)}</strong>` +
+      (w ? `(直近の週 ${esc(w.period[0])}〜${esc(w.period[1])} に足した改正の記録: ${fmt(w.records)} 件)` : '(毎週の追跡はまだ動いていません)') + ' <span class="muted">— status.json</span>';
+  }).catch(() => { if (my === seq) document.getElementById('status').textContent = '最後に確かめた日: status.json を読めませんでした'; });
+  homeExample(my);
+  // 数は、データを作るときに queries/ の問いで出して stats.json に置いたもの(開くたびに時間のかかる問いを回さない)
+  try {
+    const r = await fetch(CONFIG.stats, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(CONFIG.stats + ' を読めませんでした(' + r.status + ')');
+    const st = await r.json();
+    if (my !== seq) return;
+    const p = (st.periods || []).find(x => x.start === CONFIG.period.start && x.end === CONFIG.period.end);
+    if (!p) throw new Error(CONFIG.stats + ' に、期間 ' + CONFIG.period.start + '〜' + CONFIG.period.end + ' の数がありません');
+    const q = k => { const f = (st.queries || {})[k]; return f ? ` <a class="q" href="#/queries?f=${encodeURIComponent(f.replace(/^queries\//, ''))}" title="${esc(f)}">元の問い</a>` : ''; };
+    const later = (st.periods || []).filter(x => x.start >= CONFIG.period.end);
+    document.getElementById('stats').innerHTML = `
+      <div class="headline">この期間に、根拠の法令に改正があった手続は <strong>${fmt(p.law_level)}</strong>${q('law_level')}。<br>
+        そのうち、根拠の条・項・号が変わった(文言が変わった・別の番号へ移った・無くなった)のは <strong>${fmt(p.notified)}</strong>(約 ${Math.round(p.law_level / p.notified)} 分の 1)${q('notified')}。</div>
+      <div class="stats">
+        <div class="stat"><div class="num">${fmt(st.procedures)}</div><div class="lab">手続</div><div class="sub">令和7年度 棚卸調査${q('procedures')}</div></div>
+        <div class="stat"><div class="num">${fmt(p.changes)}</div><div class="lab">根拠の条文の変化</div><div class="sub">改正の記録(条・項・号ごと)${q('changes')}</div></div>
+        <div class="stat"><div class="num">${fmt(p.notified)}</div><div class="lab">根拠の条文が変わった手続</div><div class="sub">根拠の条・項・号が変わった手続${q('notified')}</div></div>
+      </div>` +
+      (later.length ? `<p class="muted">毎週の追跡で足した分: ${later.map(x => `${esc(x.start)}〜${esc(x.end)} 改正の記録 ${fmt(x.changes)}・根拠の条文が変わった手続 ${fmt(x.notified)}`).join('、')}</p>` : '');
+  } catch (e) { if (my === seq) document.getElementById('stats').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+// はじめの画面の例: 1 つの手続の、旧い文言と新しい文言の違う所を小さな札で見せる。changed.json の抜き出しを使う(SPARQL は使わない)
+async function homeExample(my) {
+  const el = () => document.getElementById('example'), id = CONFIG.example;
+  try {
+    if (!changedCache) { const r = await fetch(CONFIG.changed, { cache: 'no-cache' }); if (!r.ok) throw new Error(); changedCache = await r.json(); }
+    if (my !== seq) return;
+    const r = changedCache.rows.find(x => x.id === id && x.start === CONFIG.period.start && x.end === CONFIG.period.end);
+    if (!r) { el().innerHTML = ''; return; }
+    el().innerHTML = `<a class="example" href="#/procedure/${encodeURIComponent(id)}">
+      <span class="muted">手続ID ${esc(id)} ${esc(r.title)} — 根拠 ${esc(r.law || '')} ${esc(r.provLabel)}</span>
+      <span class="snip">${snipHtml(r.snip)}</span>
+      <span class="muted">区分: ${esc(r.kindLabel)}(機械の判定) — 押すと手続のページへ</span></a>`;
+  } catch (e) { if (my === seq) el().innerHTML = `<a class="example" href="#/procedure/${encodeURIComponent(id)}">手続ID ${esc(id)} の例を開く</a>`; }
+}
+
+// ---- 変わった手続の一覧 ----
+// 一覧と違う所の抜き出しは、データを作るときに scripts/82_make_changed_list.py が changed.json に置いたもの(開くたびに問いを回さない)
+function snipHtml(s) {
+  if (!s) return '';
+  if (s.type === 'diff') return `…${esc(s.before)}〔<del>${s.old ? esc(s.old) : '(なし)'}</del> → <ins>${s.new ? esc(s.new) : '(なし)'}</ins>〕${esc(s.after)}…` + (s.more ? ` <span class="muted">ほか ${fmt(s.more)} か所</span>` : '');
+  if (s.type === 'moved') return `${esc(s.from)} → ${esc(s.to)}`;
+  if (s.type === 'ambiguous') return `${esc(s.from)} → 候補 ${fmt(s.candidates)} 件`;
+  if (s.type === 'gone') return esc(s.text);
+  return '';
+}
+async function pageChanged(params, my) {
+  show(`<h1>変わった手続の一覧</h1>
+    <p class="muted">比べた期間(${esc(CONFIG.period.start)}〜${esc(CONFIG.period.end)})に、根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)。区分と抜き出しは機械の判定です(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。</p>
+    <form class="search" id="cf"><div class="row">
+      <span class="fld"><label for="ck">区分</label><select id="ck"><option value="">すべて</option></select></span>
+      <span class="fld"><label for="cm">府省庁</label><select id="cm"><option value="">すべて</option></select></span>
+      <span class="fld"><label for="cq">手続名</label><input type="text" id="cq" placeholder="手続名の一部"></span>
+    </div></form>
+    <div id="cl">${loading('一覧を読み込んでいます…')}</div>`);
+  try {
+    if (!changedCache) { const r = await fetch(CONFIG.changed, { cache: 'no-cache' }); if (!r.ok) throw new Error(CONFIG.changed + ' を読めませんでした(' + r.status + ')'); changedCache = await r.json(); }
+    if (my !== seq) return;
+  } catch (e) { if (my === seq) document.getElementById('cl').innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+  const ORDER = changedCache.kinds || [];
+  const rows = changedCache.rows.filter(r => r.start === CONFIG.period.start && r.end === CONFIG.period.end), f = document.getElementById('cf');
+  const n = new Map(), lab = new Map(), on = new Map();
+  for (const r of rows) { n.set(r.kind, (n.get(r.kind) || 0) + 1); lab.set(r.kind, r.kindLabel); on.set(r.org, (on.get(r.org) || 0) + 1); }
+  f.ck.innerHTML += ORDER.filter(k => n.has(k)).map(k => `<option value="${esc(k)}">${esc(lab.get(k))}(${fmt(n.get(k))})</option>`).join('');
+  f.cm.innerHTML += [...on].sort((a, b) => b[1] - a[1]).map(([k, c]) => `<option value="${esc(k)}">${esc(k)}(${fmt(c)})</option>`).join('');
+  f.ck.value = params.get('kind') || ''; f.cm.value = params.get('org') || ''; f.cq.value = params.get('q') || '';
+  const page = Number(params.get('page') || 1), PER = 100;
+  const sel = rows.filter(r => (!f.ck.value || r.kind === f.ck.value) && (!f.cm.value || r.org === f.cm.value) && (!f.cq.value || r.title.includes(f.cq.value)));
+  const pages = Math.max(1, Math.ceil(sel.length / PER)), cur = Math.min(Math.max(1, page), pages);
+  const link2 = k => { const ps = new URLSearchParams(); if (f.ck.value) ps.set('kind', f.ck.value); if (f.cm.value) ps.set('org', f.cm.value); if (f.cq.value) ps.set('q', f.cq.value); if (k > 1) ps.set('page', k); return '#/changed' + (ps.toString() ? '?' + ps : ''); };
+  const nav = pages > 1 ? `<p class="pager">${cur > 1 ? `<a href="${link2(cur - 1)}">前の ${PER} 件</a>` : ''} <span class="muted">${cur} / ${pages} ページ</span> ${cur < pages ? `<a href="${link2(cur + 1)}">次の ${PER} 件</a>` : ''}</p>` : '';
+  document.getElementById('cl').innerHTML = `<p class="muted">${fmt(sel.length)} 件(全 ${fmt(rows.length)} 件)</p>${nav}<div class="scroll"><table class="stack"><thead><tr><th>手続ID</th><th>手続名</th><th>根拠</th><th>区分</th><th>違う所</th><th>所管</th></tr></thead><tbody>` +
+    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span></td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
+  f.addEventListener('change', () => { location.hash = link2(1); });
+  f.addEventListener('submit', ev => { ev.preventDefault(); location.hash = link2(1); });
+}
+
+// ---- 探す ----
+function searchForm(q, law, art) {
+  return `<form class="search" id="sf">
+    <div class="row"><label for="q">手続名(または手続ID)</label><input type="text" id="q" value="${esc(q)}" placeholder="例: 被災者生活再建支援金 / 119637"><button>探す</button></div>
+    <div class="row"><label for="law">法令名</label><input type="text" id="law" value="${esc(law)}" placeholder="例: 関税法">
+      <label for="art">条の番号</label><input type="text" id="art" value="${esc(art)}" placeholder="例: 62条の15" style="flex-basis:120px"><button>探す</button></div>
+  </form>`;
+}
+function bindSearch() {
+  const f = document.getElementById('sf');
+  f.addEventListener('submit', ev => {
+    ev.preventDefault();
+    const ps = new URLSearchParams();
+    const sub = ev.submitter && ev.submitter.closest('.row');
+    const q = f.q.value.trim(), law = f.law.value.trim(), art = f.art.value.trim();
+    if (sub && sub.contains(f.q)) { if (q) ps.set('q', q); }
+    else { if (law) ps.set('law', law); if (art) ps.set('art', art); }
+    location.hash = '#/search?' + ps.toString();
+  });
+}
+function kanjiNum(s) {   // 「六十二」→ 62
+  const d = { 〇: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 }, u = { 十: 10, 百: 100, 千: 1000 };
+  let total = 0, cur = 0;
+  for (const ch of s) { if (ch in d) cur = cur * 10 + d[ch]; else if (ch in u) { total += (cur || 1) * u[ch]; cur = 0; } else return null; }
+  return total + cur;
+}
+function articleLabel(s) {   // 「62条の15」「第六十二条の十五」「62_15」「附則3」→ 「第62条の15」「附則第3条」
+  let t = s.normalize('NFKC').replace(/\s/g, '');
+  const sup = /^附則/.test(t); t = t.replace(/^附則/, '');
+  t = t.replace(/[〇一二三四五六七八九十百千]+/g, m => String(kanjiNum(m)));
+  const m = t.match(/^第?(\d+)(?:条)?((?:(?:の|_|-)\d+)*)$/);
+  if (!m) return null;
+  const tail = (m[2].match(/\d+/g) || []).map(x => 'の' + x).join('');
+  return (sup ? '附則' : '') + `第${Number(m[1])}条` + tail;
+}
+async function pageSearch(params, my) {
+  const q = params.get('q') || '', law = params.get('law') || '', art = params.get('art') || '';
+  show(`<h1>探す</h1>${searchForm(q, law, art)}<div id="res"></div>`); bindSearch();
+  const res = document.getElementById('res');
+  if (!q && !law) { res.innerHTML = '<p class="muted">手続名か、法令名と条の番号を入れてください。</p>'; return; }
+  res.innerHTML = loading('探しています…');
+  try {
+    if (q) {
+      const idLike = /^[0-9A-Za-z]+$/.test(q.normalize('NFKC'));
+      const rows = await sparql(`SELECT ?ps ?id ?title ?org WHERE {
+        ?ps a cpsv:PublicService ; dct:title ?title ; dct:identifier ?id .
+        ${idLike ? `FILTER(?id = ${lit(q.normalize('NFKC'))} || CONTAINS(?title, ${lit(q)}))` : `FILTER(CONTAINS(?title, ${lit(q)}))`}
+        OPTIONAL { ?ps cv:hasCompetentAuthority/skos:prefLabel ?org } } ORDER BY STRLEN(?title) ?title LIMIT 201`);
+      if (my !== seq) return;
+      res.innerHTML = `<h2>手続 ${rows.length > 200 ? '(先頭の 200 件)' : rows.length + ' 件'}</h2>` + (rows.length ? `<div class="scroll"><table class="stack"><thead><tr><th>手続ID</th><th>手続名</th><th>所管</th></tr></thead><tbody>` +
+        rows.slice(0, 200).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="所管">${esc(r.org)}</td></tr>`).join('') + '</tbody></table></div>' : '<p>見つかりませんでした。</p>');
+      return;
+    }
+    const lab = art ? articleLabel(art) : null;
+    if (art && !lab) { res.innerHTML = '<div class="err">条の番号を読めませんでした。「62条の15」「第六十二条の十五」「附則3」のように入れてください。</div>'; return; }
+    const laws = await sparql(`SELECT ?law ?label (COUNT(DISTINCT ?ps) AS ?n) WHERE {
+      ?law a eli:LegalResource ; rdfs:label ?label . FILTER(CONTAINS(?label, ${lit(law)}))
+      OPTIONAL { ?c jpp:citedLaw ?law . ?ps jpp:hasCitation ?c } } GROUP BY ?law ?label ORDER BY STRLEN(?label) ?label LIMIT 51`);
+    if (my !== seq) return;
+    if (!laws.length) { res.innerHTML = '<p>その名前の法令は見つかりませんでした。</p>'; return; }
+    if (!lab) {
+      res.innerHTML = `<h2>法令 ${laws.length > 50 ? '(先頭の 50 件)' : laws.length + ' 件'}</h2><div class="scroll"><table class="stack"><thead><tr><th>法令</th><th class="n">根拠にする手続</th></tr></thead><tbody>` +
+        laws.slice(0, 50).map(r => `<tr><td>${link(r.law, r.label)}</td><td class="n" data-l="根拠にする手続">${fmt(r.n)}</td></tr>`).join('') + '</tbody></table></div>';
+      return;
+    }
+    const exact = laws.filter(r => r.label === law), use = (exact.length ? exact : laws).slice(0, 50);
+    const rows = await sparql(`SELECT ?law ?lawLabel ?p WHERE {
+      VALUES ?law { ${use.map(r => iri(r.law)).join(' ')} } ?law rdfs:label ?lawLabel .
+      ?p eli:is_part_of ?law ; rdfs:label ${lit(lab)}@ja } ORDER BY ?lawLabel`);
+    if (my !== seq) return;
+    if (rows.length === 1) { location.replace(route(rows[0].p)); return; }
+    res.innerHTML = `<h2>${esc(lab)}</h2>` + (rows.length ? '<ul>' + rows.map(r => `<li>${link(r.p, r.lawLabel + ' ' + lab)}</li>`).join('') + '</ul>' :
+      `<p>${esc(lab)} は、このデータの中にありません(根拠として照合した条・項・号だけを持っています)。法令の一覧から探してください。</p><ul>` + use.map(r => `<li>${link(r.law, r.label)}</li>`).join('') + '</ul>');
+  } catch (e) { if (my === seq) res.innerHTML = errBox(e); }
+}
+
+// ---- 改正の記録を描く ----
+async function changeBlocks(where, my, opts = {}) {
+  const rows = await sparql(`SELECT ?ch ?prov ?provLabel ?kind ?kindLabel ?start ?end ?old ?oldText ?oldAsOf ?new ?newText ?newAsOf ?moved ?movedLabel ?movedText WHERE {
+    ${where}
+    ?ch a jpp:ProvisionChange ; jpp:provision ?prov ; jpp:changeKind ?kind ; dct:temporal ?per .
+    ?prov rdfs:label ?provLabel . ?kind skos:prefLabel ?kindLabel . ?per dcat:startDate ?start ; dcat:endDate ?end .
+    OPTIONAL { ?ch jpp:oldVersion ?old . ?old jpp:text ?oldText . }
+    OPTIONAL { ?ch jpp:newVersion ?new . ?new jpp:text ?newText . }
+    OPTIONAL { ?ch jpp:movedTo ?moved . ?moved rdfs:label ?movedLabel .
+               OPTIONAL { ?moved eli:is_realized_by ?mv . ?mv jpp:asOf ?end ; jpp:text ?movedText } }
+  } ORDER BY ?start ?provLabel`);
+  if (my !== seq || !rows.length) return rows.length ? '' : null;
+  const seen = new Map(); for (const r of rows) if (!seen.has(r.ch)) seen.set(r.ch, r);
+  const chs = [...seen.values()];
+  const extra = await sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote WHERE {
+    VALUES ?ch { ${chs.map(r => iri(r.ch)).join(' ')} }
+    { ?ch jpp:candidate ?cand . ?cand rdfs:label ?candLabel } UNION
+    { ?ch jpp:lawRevisionInPeriod ?rev . ?rev jpp:enforcementDate ?revDate . OPTIONAL { ?rev jpp:amendmentLawNum ?revNum } } UNION
+    { ?ch jpp:review ?rv . ?rv jpp:reviewerType/skos:prefLabel ?rvWho ; jpp:reviewDate ?rvDate ; jpp:reviewResult/skos:prefLabel ?rvRes . OPTIONAL { ?rv jpp:reviewReason ?rvReason } OPTIONAL { ?rv jpp:reviewNote ?rvNote } } } ORDER BY ?revDate ?rvDate`);
+  if (my !== seq) return '';
+  const cands = {}, revs = {}, rvs = {};
+  for (const x of extra) { if (x.cand) (cands[x.ch] ||= []).push(x); if (x.rev) (revs[x.ch] ||= []).push(x); if (x.rv) (rvs[x.ch] ||= []).push(x); }
+  return chs.map(r => {
+    const moved = !!r.moved, oldT = r.oldText || '', newT = moved ? (r.movedText || '') : (r.newText || '');
+    let L = esc(oldT), R = esc(newT);
+    if (r.oldText && (moved ? r.movedText : r.newText)) [L, R] = diffText(oldT, newT);
+    const rightTitle = moved ? `移った先 ${link(r.moved, r.movedLabel)} の文言(${esc(r.end)} 時点)` : `新しい文言(${esc(r.end)} 時点)`;
+    const rightBody = (moved ? r.movedText : r.newText) ? R : (r.kind.includes('removed') ? '(この番号の条・項・号は、新しい版にありません)' : '(新しい文言はありません)');
+    const cl = cands[r.ch] || [], rv = revs[r.ch] || [];
+    return `<div class="change">
+      <div><span class="tag">${esc(r.kindLabel)}</span> ${opts.showProv ? link(r.prov, r.provLabel) + ' ' : ''}<span class="muted">比べた期間 ${esc(r.start)}〜${esc(r.end)}</span></div>
+      ${(rvs[r.ch] || []).map(v => `<div class="note">${esc(v.rvWho)}が読んで確かめた(${esc(v.rvDate)}): ${esc(v.rvRes)}${v.rvReason ? '。理由: ' + esc(v.rvReason) : ''}${v.rvNote ? '。メモ: ' + esc(v.rvNote) : ''}</div>`).join('')}
+      ${cl.length ? `<p>移った先の候補(一つに決まらない): ${cl.map(c => link(c.cand, c.candLabel)).join('、')}</p>` : ''}
+      <div class="cols">
+        <div><h3>旧い文言(${esc(r.start)} 時点)</h3><div class="text">${r.oldText ? L : '(旧い文言はありません)'}</div></div>
+        <div><h3>${rightTitle}</h3><div class="text">${rightBody}</div></div>
+      </div>
+      <p class="muted legend">違う所: <del>旧い文言だけにある文字</del> <ins>新しい文言だけにある文字</ins>(文字の単位で機械が印を付けた。長い文は文の単位)</p>
+      ${moved && r.newText ? `<details><summary>同じ番号(${esc(r.provLabel)})の新しい文言</summary><div class="text">${esc(r.newText)}</div></details>` : ''}
+      ${rv.length ? `<p class="muted">期間内に施行されたこの法令の改正(どれがこの条・項・号を変えたかは分かりません): ${rv.map(x => esc(x.revDate) + (x.revNum ? ' ' + esc(x.revNum) : '')).join('、')}</p>` : ''}
+    </div>`;
+  }).join('') + `<p class="note">区分は機械の判定です(文言の比べと決まりによる)。手続の中身が変わるかどうかは判断していません。<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a></p>`;
+}
+
+// ---- 手続 ----
+async function pageProcedure(id, my) {
+  const u = B + 'procedure/' + id;
+  show(loading());
+  try {
+    const rows = await sparql(`SELECT ?title ?id ?desc ?org ?orgU ?type ?lawName ?citText ?law ?lawLabel ?lid ?prov ?provLabel ?mrLabel WHERE {
+      BIND(${iri(u)} AS ?ps) ?ps a cpsv:PublicService ; dct:title ?title ; dct:identifier ?id .
+      OPTIONAL { ?ps dct:description ?desc }
+      OPTIONAL { ?ps cv:hasCompetentAuthority ?orgU . ?orgU skos:prefLabel ?org }
+      OPTIONAL { ?rec jpp:describes ?ps ; jpp:r7-c08/skos:prefLabel ?type }
+      OPTIONAL { ?ps jpp:hasCitation ?c .
+        OPTIONAL { ?c jpp:citationLawName ?lawName } OPTIONAL { ?c jpp:citationText ?citText }
+        OPTIONAL { ?c jpp:citedLaw ?law . ?law rdfs:label ?lawLabel ; eli:id_local ?lid }
+        OPTIONAL { ?c jpp:citedProvision ?prov . ?prov rdfs:label ?provLabel }
+        OPTIONAL { ?c jpp:matchResult/skos:prefLabel ?mrLabel } } }`);
+    if (my !== seq) return;
+    if (!rows.length) { show(`<h1>手続が見つかりません</h1><p>${esc(u)}</p>`); return; }
+    const r = rows[0];
+    show(`<p class="muted">手続ID ${esc(r.id)}</p><h1>${esc(r.title)}</h1>
+      <dl class="kv">
+        <dt>所管</dt><dd>${esc(r.org || '—')}</dd>
+        <dt>類型</dt><dd>${esc(r.type || '—')}</dd>
+        <dt>根拠(調査の記載)</dt><dd>${esc((r.lawName || '') + ' ' + (r.citText || ''))}</dd>
+        <dt>根拠の条・項・号</dt><dd>${r.law ? link(r.law, r.lawLabel) + ' ' : ''}${r.prov ? link(r.prov, r.provLabel) : '(照合できた条・項・号なし)'}
+          ${r.lid ? ` — <a href="${esc(egov(r.lid))}" rel="noopener">e-Gov で法令を開く</a>` : ''}
+          <br><span class="muted">照合の結果: ${esc(r.mrLabel || '—')}</span></dd>
+      </dl>
+      ${r.desc ? `<p class="muted">${esc(r.desc)}</p>` : ''}
+      <h2>根拠の条・項・号の変化</h2><div id="chg">${loading()}</div>
+      <p class="muted">データ: <a href="${esc(CONFIG.endpoint + '?query=' + encodeURIComponent('DESCRIBE ' + iri(u)))}" rel="noopener">この手続の RDF(DESCRIBE)</a></p>`);
+    const html = await changeBlocks(`?ch jpp:affects ${iri(u)} .`, my, { showProv: true });
+    if (my !== seq) return;
+    document.getElementById('chg').innerHTML = html === null ? `<p>比べた期間に、根拠の条・項・号の変化は見つかりませんでした${r.prov ? '' : '(根拠の条・項・号まで照合できていないので、比べていません)'}。</p>` : html;
+  } catch (e) { if (my === seq) fail(e); }
+}
+
+// ---- 条・項・号 ----
+async function pageProvision(path, my) {
+  const u = B + 'provision/' + path, lid = path.split('/')[0];
+  show(loading());
+  try {
+    const [info] = await sparql(`SELECT ?label ?law ?lawLabel ?parent ?parentLabel ?lv WHERE {
+      ${iri(u)} rdfs:label ?label ; eli:is_part_of ?parent . ?parent rdfs:label ?parentLabel .
+      ${iri(u)} eli:is_part_of+ ?law . ?law a eli:LegalResource ; rdfs:label ?lawLabel . FILTER NOT EXISTS { ?law a eli:LegalResourceSubdivision }
+      OPTIONAL { ${iri(u)} jpp:level/skos:prefLabel ?lv } }`);
+    if (my !== seq) return;
+    if (!info) { show(`<h1>条・項・号が見つかりません</h1><p>${esc(u)}</p>`); return; }
+    show(`<p class="muted">${link(info.law, info.lawLabel)}${info.parent !== info.law ? ' › ' + link(info.parent, info.parentLabel) : ''}</p>
+      <h1>${esc(info.lawLabel)} ${esc(info.label)}</h1>
+      <p><a href="${esc(egov(lid))}" rel="noopener">e-Gov で法令を開く</a></p>
+      <h2>この条文を根拠にする手続</h2><div id="ps">${loading()}</div>
+      <h2>変化</h2><div id="chg">${loading()}</div>`);
+    sparql(`SELECT DISTINCT ?ps ?id ?title ?org ?pl WHERE {
+      ?p eli:is_part_of* ${iri(u)} ; rdfs:label ?pl . ?ps a cpsv:PublicService ; cv:hasLegalResource ?p ; dct:identifier ?id ; dct:title ?title .
+      OPTIONAL { ?ps cv:hasCompetentAuthority/skos:prefLabel ?org } } ORDER BY ?pl xsd:integer(?id) ?id LIMIT 1001`).then(rows => {
+      if (my !== seq) return;
+      document.getElementById('ps').innerHTML = rows.length ? `<p class="muted">${rows.length > 1000 ? '先頭の 1,000 件' : fmt(rows.length) + ' 件'}(下の項・号を根拠にする手続も含む)</p><div class="scroll"><table class="stack"><thead><tr><th>手続ID</th><th>手続名</th><th>根拠</th><th>所管</th></tr></thead><tbody>` +
+        rows.slice(0, 1000).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.pl)}</td><td data-l="所管">${esc(r.org)}</td></tr>`).join('') + '</tbody></table></div>' : '<p>この条文(とその下の項・号)を根拠にする手続はありません。</p>';
+    }).catch(e => { if (my === seq) document.getElementById('ps').innerHTML = errBox(e); });
+    const html = await changeBlocks(`?ch jpp:provision ?pp . ?pp eli:is_part_of* ${iri(u)} .`, my, { showProv: true });
+    if (my !== seq) return;
+    const into = await sparql(`SELECT ?ch ?prov ?provLabel ?kindLabel WHERE { ?ch jpp:movedTo|jpp:candidate ${iri(u)} ; jpp:provision ?prov ; jpp:changeKind/skos:prefLabel ?kindLabel . ?prov rdfs:label ?provLabel }`);
+    if (my !== seq) return;
+    document.getElementById('chg').innerHTML = (html === null ? '<p>比べた期間に、この条文(とその下の項・号)の変化は見つかりませんでした。</p>' : html) +
+      (into.length ? `<p>この番号は、ほかの条・項・号の移った先(または候補)になっています: ${into.map(x => link(x.prov, x.provLabel) + '(' + esc(x.kindLabel) + ')').join('、')}</p>` : '');
+  } catch (e) { if (my === seq) fail(e); }
+}
+
+// ---- 法令 ----
+async function pageLaw(lid, my) {
+  const u = B + 'law/' + lid;
+  show(loading());
+  try {
+    const [info] = await sparql(`SELECT ?label (COUNT(DISTINCT ?ps) AS ?n) WHERE { ${iri(u)} rdfs:label ?label . OPTIONAL { ?c jpp:citedLaw ${iri(u)} . ?ps jpp:hasCitation ?c } } GROUP BY ?label`);
+    if (my !== seq) return;
+    if (!info) { show(`<h1>法令が見つかりません</h1><p>${esc(u)}</p>`); return; }
+    show(`<h1>${esc(info.label)}</h1><p><a href="${esc(egov(lid))}" rel="noopener">e-Gov で開く</a> <span class="muted">法令ID ${esc(lid)}</span></p>
+      <p>この法令を根拠にする手続: ${fmt(info.n)} 件</p>
+      ${searchForm('', info.label, '')}
+      <h2>根拠にされている条</h2><div id="arts">${loading()}</div>`); bindSearch();
+    const rows = await sparql(`SELECT ?art ?label (COUNT(DISTINCT ?ps) AS ?n) (COUNT(DISTINCT ?ch) AS ?chs) WHERE {
+      ?art eli:is_part_of ${iri(u)} ; rdfs:label ?label .
+      ?p eli:is_part_of* ?art . ?ps cv:hasLegalResource ?p .
+      OPTIONAL { ?ch jpp:provision ?pp . ?pp eli:is_part_of* ?art } } GROUP BY ?art ?label ORDER BY DESC(?n) LIMIT 300`);
+    if (my !== seq) return;
+    document.getElementById('arts').innerHTML = rows.length ? `<div class="scroll"><table class="stack"><thead><tr><th>条</th><th class="n">手続</th><th class="n">改正の記録</th></tr></thead><tbody>` +
+      rows.map(r => `<tr><td>${link(r.art, r.label)}</td><td class="n" data-l="手続">${fmt(r.n)}</td><td class="n" data-l="改正の記録">${fmt(r.chs)}</td></tr>`).join('') + '</tbody></table></div>' : '<p>条まで照合できた手続はありません。</p>';
+  } catch (e) { if (my === seq) fail(e); }
+}
+
+// ---- 改正の記録の URI → その条・項・号へ ----
+async function pageChange(path, my) {
+  try {
+    const [r] = await sparql(`SELECT ?prov WHERE { ${iri(B + 'change/' + path)} jpp:provision ?prov }`);
+    if (my !== seq) return;
+    if (r) location.replace(route(r.prov)); else show(`<h1>改正の記録が見つかりません</h1>`);
+  } catch (e) { if (my === seq) fail(e); }
+}
+
+// ---- 府省庁ごと ----
+async function pageMinistries(my) {
+  show(`<h1>府省庁ごとの数</h1><p class="muted">所管府省庁ごとの手続の数と、比べた期間に根拠の条・項・号が変わった手続の数(<code>queries/q3_changed_by_ministry.rq</code> をそのまま使う)。</p><div id="m">${loading()}</div>`);
+  try {
+    const q = await (await fetch(CONFIG.queries + 'q3_changed_by_ministry.rq')).text();
+    const rows = await sparql(q);
+    if (my !== seq) return;
+    const max = Math.max(...rows.map(r => Number(r.percent)));
+    document.getElementById('m').innerHTML = `<div class="scroll"><table class="stack"><thead><tr><th>府省庁</th><th class="n">手続</th><th class="n">変わった手続</th><th class="n">割合</th><th></th></tr></thead><tbody>` +
+      rows.map(r => `<tr><td>${esc(r.ministry)}</td><td class="n" data-l="手続">${fmt(r.procedures)}</td><td class="n" data-l="変わった手続">${fmt(r.changed)}</td><td class="n" data-l="割合">${Number(r.percent).toFixed(2)}%</td><td style="width:22%"><span class="bar" style="width:${max ? (Number(r.percent) / max * 100).toFixed(1) : 0}%"></span></td></tr>`).join('') + '</tbody></table></div>';
+  } catch (e) { if (my === seq) document.getElementById('m').innerHTML = errBox(e); }
+}
+
+// ---- 問いを試す ----
+async function pageQueries(params, my) {
+  const f = params.get('f') || CONFIG.queryFiles[0][0];
+  show(`<h1>問いを試す</h1><p class="muted"><code>queries/</code> の SPARQL を開いて、そのまま、または書き換えて試せます。読むだけのサーバーなので、データは変わりません。</p>
+    <ul>${CONFIG.queryFiles.map(([n, t]) => `<li><a href="#/queries?f=${encodeURIComponent(n)}">${esc(n)}</a> — ${esc(t)}</li>`).join('')}</ul>
+    <h2>${esc(f)}</h2><textarea id="qt" rows="16" spellcheck="false">読み込んでいます…</textarea>
+    <p><button id="run">試す</button> <span class="muted" id="qs"></span></p><div id="qr"></div>`);
+  try {
+    if (!CONFIG.queryFiles.some(([n]) => n === f)) throw new Error('その問いはありません');
+    const [pre, body] = await Promise.all([fetch(CONFIG.queries + 'PREFIXES.rq').then(r => r.text()), fetch(CONFIG.queries + f).then(r => r.text())]);
+    if (my !== seq) return;
+    document.getElementById('qt').value = pre.trim() + '\n\n' + body.trim() + '\n';
+  } catch (e) { document.getElementById('qt').value = '# ' + (e.message || e); }
+  document.getElementById('run').addEventListener('click', async () => {
+    const out = document.getElementById('qr'), st = document.getElementById('qs');
+    out.innerHTML = loading('問い合わせています…'); const t0 = performance.now();
+    try {
+      const r = await fetch(CONFIG.endpoint, { method: 'POST', body: new URLSearchParams({ query: document.getElementById('qt').value }), headers: { Accept: 'application/sparql-results+json' } });
+      if (r.status === 401 || r.status === 403) throw offlineError();
+      if (!r.ok) throw new Error('SPARQL の答えが ' + r.status + ': ' + (await r.text()).slice(0, 500));
+      const j = await r.json(); st.textContent = ((performance.now() - t0) / 1000).toFixed(2) + ' 秒';
+      if ('boolean' in j) { out.innerHTML = `<p>${j.boolean}</p>`; return; }
+      const vars = j.head.vars, rows = j.results.bindings;
+      out.innerHTML = `<p class="muted">${fmt(rows.length)} 件</p><div class="scroll"><table><thead><tr>${vars.map(v => `<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>` +
+        rows.slice(0, 2000).map(b => '<tr>' + vars.map(v => { const x = b[v]; if (!x) return '<td></td>'; const s = x.value.length > 400 ? x.value.slice(0, 400) + '…' : x.value; return `<td>${x.type === 'uri' ? link(x.value) : esc(s)}</td>`; }).join('') + '</tr>').join('') + '</tbody></table></div>' +
+        (rows.length > 2000 ? '<p class="muted">先頭の 2,000 件だけを出しています。</p>' : '');
+    } catch (e) { st.textContent = ''; out.innerHTML = errBox(e instanceof TypeError ? offlineError() : e); }
+  });
+}
+
+// ---- 行き先 ----
+function go() {
+  const my = ++seq;
+  const h = decodeURIComponent(location.hash.replace(/^#/, '')) || '/';
+  const [path, qs] = h.split('?');
+  const params = new URLSearchParams(qs || '');
+  window.scrollTo(0, 0);
+  let m;
+  if (path === '/' || path === '') return pageHome(my);
+  if (path === '/search') return pageSearch(params, my);
+  if (path === '/ministries') return pageMinistries(my);
+  if (path === '/changed') return pageChanged(params, my);
+  if (path === '/queries') return pageQueries(params, my);
+  if ((m = path.match(/^\/procedure\/([0-9A-Za-z]+)$/))) return pageProcedure(m[1], my);
+  if ((m = path.match(/^\/provision\/([0-9A-Za-z]+(?:\/[0-9A-Za-z_-]+)+)$/))) return pageProvision(m[1], my);
+  if ((m = path.match(/^\/law\/([0-9A-Za-z]+)$/))) return pageLaw(m[1], my);
+  if ((m = path.match(/^\/change\/(.+)$/))) return pageChange(m[1], my);
+  show('<h1>ページが見つかりません</h1><p><a href="#/">はじめへ</a></p>');
+}
+// w3id からの ?uri=… を、ページの中の行き先に直す
+(() => {
+  const u = new URLSearchParams(location.search).get('uri');
+  if (u && route(u)) history.replaceState(null, '', location.pathname + route(u));
+})();
+window.addEventListener('hashchange', go);
+go();
+</script>
+</body>
+</html>

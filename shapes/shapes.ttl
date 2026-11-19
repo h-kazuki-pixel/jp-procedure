@@ -1,0 +1,77 @@
+@prefix cpsv: <http://purl.org/vocab/cpsv#> .
+@prefix cv: <http://data.europa.eu/m8g/> .
+@prefix eli: <http://data.europa.eu/eli/ontology#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+# 1 件の中で閉じる形だけを置く。全体の数(手続が 76,275 件など)は scripts/57_count_checks.py で数える。
+@prefix dcat: <http://www.w3.org/ns/dcat#> .
+@prefix jpp: <https://w3id.org/jp-procedure/def#> .
+
+jpp:ProcedureShape a sh:NodeShape ; sh:targetClass cpsv:PublicService ;
+  sh:property [ sh:path dct:identifier ; sh:minCount 1 ; sh:maxCount 1 ] ;
+  sh:property [ sh:path jpp:hasCitation ; sh:minCount 1 ; sh:maxCount 1 ; sh:class jpp:LegalCitation ] ;
+  sh:property [ sh:path ( jpp:hasCitation jpp:matchResult ) ; sh:minCount 1 ; sh:maxCount 1 ; sh:name "手続ごとに照合の結果が 1 つ" ] ;
+  sh:property [ sh:path ( jpp:hasCitation jpp:citationText ) ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ; sh:name "手続ごとに原文の条項号が 1 つ" ] ;
+  sh:property [ sh:path cv:hasLegalResource ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+  sh:property [ sh:path dct:title ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype rdf:langString ] ;
+  sh:property [ sh:path dct:description ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype rdf:langString ] ;
+  sh:property [ sh:path cv:hasCompetentAuthority ; sh:minCount 1 ; sh:maxCount 1 ; sh:class cv:PublicOrganisation ] .
+jpp:CitationShape a sh:NodeShape ; sh:targetClass jpp:LegalCitation ;
+  sh:property [ sh:path jpp:matchResult ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/match-result/item> <https://w3id.org/jp-procedure/code/match-result/paragraph> <https://w3id.org/jp-procedure/code/match-result/article> <https://w3id.org/jp-procedure/code/match-result/no-article> <https://w3id.org/jp-procedure/code/match-result/unparsed> <https://w3id.org/jp-procedure/code/match-result/no-law-id> <https://w3id.org/jp-procedure/code/match-result/no-text> ) ] ;
+  sh:property [ sh:path jpp:citationText ; sh:minCount 1 ; sh:maxCount 1 ] ;
+  sh:property [ sh:path jpp:lawIdMethod ; sh:minCount 1 ; sh:maxCount 1 ; sh:class skos:Concept ] .
+jpp:SubdivisionShape a sh:NodeShape ; sh:targetClass eli:LegalResourceSubdivision ;
+  sh:property [ sh:path eli:is_part_of ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ;
+                sh:or ( [ sh:class eli:LegalResource ] [ sh:class eli:LegalResourceSubdivision ] ) ; sh:name "条・項・号ごとに eli:is_part_of が 1 つ" ] ;
+  sh:property [ sh:path jpp:level ; sh:minCount 1 ; sh:maxCount 1 ] .
+jpp:LawShape a sh:NodeShape ; sh:targetClass eli:LegalResource ; sh:name "法令ごとに eli:id_local が 1 つ(条・項・号は ELI では LegalResource の下位クラスなので外す)" ;
+  sh:or ( [ sh:class eli:LegalResourceSubdivision ] [ sh:property [ sh:path eli:id_local ; sh:minCount 1 ; sh:maxCount 1 ] ] ) .
+
+jpp:ExpressionShape a sh:NodeShape ; sh:targetClass eli:LegalExpression ;
+  sh:property [ sh:path eli:realizes ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalResourceSubdivision ] ;
+  sh:property [ sh:path eli:version_date ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ; sh:name "施行日" ] ;
+  sh:property [ sh:path jpp:text ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype rdf:langString ; sh:name "本文" ] ;
+  sh:property [ sh:path jpp:lawRevision ; sh:minCount 1 ; sh:maxCount 1 ] ;
+  sh:property [ sh:path jpp:asOf ; sh:minCount 1 ; sh:datatype xsd:date ; sh:name "確かめた日(毎週の追跡で増えるので上限は置かない)" ] .
+jpp:CitedProvisionShape a sh:NodeShape ; sh:targetObjectsOf jpp:citedProvision ; sh:name "照合できた最も深い条・項・号に 2025-11-01 の版がちょうど 1 つ(版の数の上限は置かない)" ;
+  sh:property [ sh:path eli:is_realized_by ; sh:minCount 1 ;
+                sh:qualifiedValueShape [ sh:path jpp:asOf ; sh:hasValue "2025-11-01"^^xsd:date ] ; sh:qualifiedMinCount 1 ; sh:qualifiedMaxCount 1 ] .
+jpp:RecordShape a sh:NodeShape ; sh:targetClass jpp:SurveyRecord ;
+  sh:property [ sh:path jpp:describes ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+  sh:property [ sh:path jpp:sourceRow ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:integer ] ;
+  sh:property [ sh:path prov:wasDerivedFrom ; sh:minCount 1 ] .
+jpp:ChangeShape a sh:NodeShape ; sh:targetClass jpp:ProvisionChange ; sh:name "改正の記録" ;
+  sh:property [ sh:path jpp:provision ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalResourceSubdivision ] ;
+  sh:property [ sh:path jpp:changeKind ; sh:minCount 1 ; sh:maxCount 1 ; sh:class skos:Concept ; sh:name "区分が 1 つ" ] ;
+  sh:property [ sh:path dct:temporal ; sh:minCount 1 ; sh:maxCount 1 ; sh:class dct:PeriodOfTime ; sh:name "期間が 1 つ" ] ;
+  sh:property [ sh:path jpp:oldVersion ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalExpression ; sh:name "旧い版が 1 つ" ] ;
+  sh:property [ sh:path jpp:newVersion ; sh:maxCount 1 ; sh:class eli:LegalExpression ] ;
+  sh:property [ sh:path jpp:movedTo ; sh:maxCount 1 ; sh:class eli:LegalResourceSubdivision ] ;
+  sh:property [ sh:path jpp:candidate ; sh:class eli:LegalResourceSubdivision ] ;
+  sh:property [ sh:path jpp:r0 ; sh:maxCount 1 ; sh:datatype xsd:decimal ; sh:minInclusive 0 ; sh:maxInclusive 1 ; sh:name "r0 は 0〜1" ] ;
+  sh:property [ sh:path jpp:r1 ; sh:maxCount 1 ; sh:datatype xsd:decimal ; sh:minInclusive 0 ; sh:maxInclusive 1 ; sh:name "r1 は 0〜1" ] ;
+  sh:property [ sh:path jpp:affects ; sh:minCount 1 ; sh:nodeKind sh:IRI ] ;
+  sh:property [ sh:path prov:wasGeneratedBy ; sh:minCount 1 ; sh:maxCount 1 ; sh:class prov:Activity ] ;
+  sh:property [ sh:path jpp:lawRevisionInPeriod ; sh:class jpp:LawRevision ] ;
+  sh:property [ sh:path jpp:review ; sh:nodeKind sh:IRI ] ;
+  sh:or ( [ sh:property [ sh:path jpp:changeKind ; sh:not [ sh:in ( <https://w3id.org/jp-procedure/code/change-kind/swapped-moved> <https://w3id.org/jp-procedure/code/change-kind/removed-moved> ) ] ] ]
+          [ sh:property [ sh:path jpp:movedTo ; sh:minCount 1 ; sh:maxCount 1 ] ] ) ;
+  sh:or ( [ sh:property [ sh:path jpp:changeKind ; sh:not [ sh:in ( <https://w3id.org/jp-procedure/code/change-kind/swapped-ambiguous> <https://w3id.org/jp-procedure/code/change-kind/removed-ambiguous> ) ] ] ]
+          [ sh:property [ sh:path jpp:candidate ; sh:minCount 2 ] ; sh:property [ sh:path jpp:movedTo ; sh:maxCount 0 ] ] ) .
+jpp:RevisionShape a sh:NodeShape ; sh:targetClass jpp:LawRevision ; sh:name "期間内の改正" ;
+  sh:property [ sh:path jpp:revisionOf ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalResource ] ;
+  sh:property [ sh:path jpp:enforcementDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ; sh:name "施行期日(記録の期間の中にあるかは scripts/57_count_checks.py で確かめる)" ] .
+jpp:ReviewShape a sh:NodeShape ; sh:targetClass jpp:Review ; sh:name "区分を確かめた記録" ;
+  sh:property [ sh:path jpp:reviewerType ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/reviewer-type/other-ai> <https://w3id.org/jp-procedure/code/reviewer-type/human> ) ] ;
+  sh:property [ sh:path jpp:reviewDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] ;
+  sh:property [ sh:path jpp:reviewResult ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/review-result/decided> <https://w3id.org/jp-procedure/code/review-result/agree> <https://w3id.org/jp-procedure/code/review-result/disagree> <https://w3id.org/jp-procedure/code/review-result/unknown> ) ] ;
+  sh:property [ sh:path jpp:reviewReason ; sh:maxCount 1 ; sh:datatype rdf:langString ] ;
+  sh:property [ sh:path jpp:reviewNote ; sh:maxCount 1 ; sh:datatype rdf:langString ] ;
+  sh:property [ sh:path jpp:reviewSampling ; sh:maxCount 1 ; sh:datatype rdf:langString ] ;
+  sh:property [ sh:path [ sh:inversePath jpp:review ] ; sh:minCount 1 ; sh:maxCount 1 ; sh:name "どれか 1 つの改正の記録から指される" ] .

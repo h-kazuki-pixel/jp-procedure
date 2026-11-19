@@ -1,0 +1,6 @@
+# Cloud Build に送るのは deploy/ と data/rdf/ だけ(約 19.5 MB)
+/*
+!/deploy/
+!/data/
+/data/*
+!/data/rdf/
