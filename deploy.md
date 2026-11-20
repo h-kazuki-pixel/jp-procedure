@@ -132,7 +132,9 @@ done
    gcloud storage buckets add-iam-policy-binding gs://jp-procedure-build-source --member=$D --role=roles/storage.objectAdmin
    gcloud storage buckets add-iam-policy-binding gs://jp-procedure-build-source --member=$D --role=roles/storage.legacyBucketReader
    ```
-   - 信頼する相手を、GitHub の `<OWNER>/<REPO>` の main だけに絞る。プロバイダの条件と、`roles/iam.workloadIdentityUser` を付ける subject の二重で絞る。
+   - 信頼する相手を、GitHub の `<OWNER>/<REPO>` の main だけに絞る。**縛りは、プロバイダの条件(持ち主 ID・リポジトリ ID・リポジトリ名・`refs/heads/main`)にある。**
+     `roles/iam.workloadIdentityUser` は、プール `github` の中の `attribute.repository` が `<OWNER>/<REPO>` のもの(principalSet)に付ける。
+   - **このプール(`github`)には、プロバイダを足さない。** 足すなら、同じ条件(持ち主 ID・リポジトリ ID・リポジトリ名・main)を付ける。principalSet はプールの中のどのプロバイダから来たものにも当たるので、条件の無いプロバイダを足すと縛りが外れる。
    ```sh
    gcloud iam workload-identity-pools create github --location global --display-name "GitHub Actions"
    gcloud iam workload-identity-pools providers create-oidc jp-procedure-main --location global --workload-identity-pool github \
@@ -140,10 +142,11 @@ done
      --attribute-mapping 'google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner_id=assertion.repository_owner_id,attribute.repository_id=assertion.repository_id,attribute.ref=assertion.ref' \
      --attribute-condition "assertion.repository_owner_id == '<OWNER_ID>' && assertion.repository == '<OWNER>/<REPO>' && assertion.ref == 'refs/heads/main'"
    gcloud iam service-accounts add-iam-policy-binding jp-procedure-deployer@$P.iam.gserviceaccount.com --role roles/iam.workloadIdentityUser \
-     --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/subject/repo:<OWNER>/<REPO>:ref:refs/heads/main"
+     --member "principalSet://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/attribute.repository/<OWNER>/<REPO>"
    ```
+   - subject(`google.subject` = GitHub のトークンの `sub`)には結ばない。GitHub のリポジトリが「変わらない ID の subject」(`use_immutable_subject`)を使うと、`sub` は `repo:<OWNER>@<OWNER_ID>/<REPO>@<REPO_ID>:ref:refs/heads/main` の形になり、`repo:<OWNER>/<REPO>:ref:…` に結んだものは通らない(2026-11-20 の 1 回目の試しで、なり代わりが 403 になった)。今の形は `gh api repos/<OWNER>/<REPO>/actions/oidc/customization/sub` で見られる。
    - 持ち主の数の ID(`<OWNER_ID>`)を条件に入れるのは、持ち主が名前を変えたあとに別の人が同じ名前を取っても、通らないようにするため。
-   - ワークフローで `environment:` を使うと subject の形が変わって通らなくなる。今のワークフローは使っていない。
+   - 結び付けは subject に頼らないので、ワークフローで `environment:` を使っても通るはず(条件の `assertion.ref` は main のまま。試していない)。今のワークフローは使っていない。
    - 付いた権限は、Policy Troubleshooter で確かめられる(`gcloud services enable policytroubleshooter.googleapis.com` のあと、`gcloud policy-intelligence troubleshoot-policy iam <資源> --principal-email=jp-procedure-deployer@$P.iam.gserviceaccount.com --permission=<権限>`)。
 7. **GitHub にリポジトリを作った直後に、リポジトリの ID を信頼の条件に足す**
    - 同じ名前のリポジトリを消して作り直したときに、古い条件のまま通らないようにするため。
