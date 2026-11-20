@@ -167,11 +167,11 @@ const md = d => { const m = String(d || '').match(/^\d{4}-(\d{2})-(\d{2})/); ret
 // 毎週の追跡が見つけた改正(jpp:foundRevision)。f = {num, prom, enf, on, late, recheck}
 // late: 改正そのものを週の追跡が初めて足し、施行日が比べた期間より前(e-Gov が遅れて載せた)。recheck: あとで比べた理由(code/recheck-reason の notation)
 const RECHECK = { 'position-undetermined': '初めの比べで位置を決められず', 'version-missing': '初めに版を取れず' };
-function foundHtml(f, full) {
+function foundHtml(f, full, start) {   // start: 比べた期間の始めの日
   if (!f) return '';
   const rev = `${f.num ? esc(f.num) : '(法令番号なし)'}` + (full ? `(${f.prom ? '公布 ' + esc(f.prom) + '・' : ''}施行 ${esc(f.enf)})` : '');
   const re = f.recheck ? `<span class="late recheck">あとで比べた</span> ${f.late ? '' : 'この改正は初めのデータにあります。'}この条・項・号は${RECHECK[f.recheck] || 'あとで比べることになり'}、${esc(f.on)} に比べ直しました。` : '';
-  const late = (f.late ? `<span class="late">遅れて載った改正</span> 施行は ${ymd(f.enf)}(比べた期間より前)。e-Gov に載ったのを見つけたのは ${md(f.on)}。` : '') + (f.late && re ? '<br>' : '') + re;
+  const late = (f.late ? `<span class="late">遅れて載った改正</span> 施行は ${ymd(f.enf)}(${f.enf === start ? '比べた期間の始めの日' : '比べた期間より前'})。e-Gov に載ったのを見つけたのは ${md(f.on)}。` : '') + (f.late && re ? '<br>' : '') + re;
   return full ? `<p class="found">見つけた改正(新しい文言の版の改正): ${rev}${f.on && !f.late ? `。見つけた日 ${esc(f.on)}` : ''}</p>${late ? `<div class="note">${late}</div>` : ''}`
               : `${rev}${late ? `<br>${late}` : ''}`;
 }
@@ -364,7 +364,7 @@ async function pageChanged(params, my) {
   const link2 = k => { const ps = new URLSearchParams(); if (f.cp.value !== baseKey) ps.set('period', f.cp.value); if (f.ck.value) ps.set('kind', f.ck.value); if (f.cm.value) ps.set('org', f.cm.value); if (f.cq.value) ps.set('q', f.cq.value); if (k > 1) ps.set('page', k); return '#/changed' + (ps.toString() ? '?' + ps : ''); };
   const nav = pages > 1 ? `<p class="pager">${cur > 1 ? `<a href="${link2(cur - 1)}">前の ${PER} 件</a>` : ''} <span class="muted">${cur} / ${pages} ページ</span> ${cur < pages ? `<a href="${link2(cur + 1)}">次の ${PER} 件</a>` : ''}</p>` : '';
   document.getElementById('cl').innerHTML = `<p class="muted">${fmt(sel.length)} 件(全 ${fmt(rows.length)} 件)</p>${nav}<div class="scroll"><table class="stack"><thead><tr><th>手続ID</th><th>手続名</th><th>根拠</th><th>区分</th><th>違う所</th><th>所管</th></tr></thead><tbody>` +
-    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span>${f.cp.value === 'all' ? `<div class="muted small">${esc(r.start)}〜${esc(r.end)}</div>` : ''}${r.found ? `<div class="small found">${foundHtml(r.found, false)}</div>` : ''}</td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
+    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span>${f.cp.value === 'all' ? `<div class="muted small">${esc(r.start)}〜${esc(r.end)}</div>` : ''}${r.found ? `<div class="small found">${foundHtml(r.found, false, r.start)}</div>` : ''}</td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
   f.addEventListener('change', () => { location.hash = link2(1); });
   f.addEventListener('submit', ev => { ev.preventDefault(); location.hash = link2(1); });
 }
@@ -488,7 +488,7 @@ async function changeBlocks(where, my, opts = {}) {
     const cl = cands[r.ch] || [], rv = revs[r.ch] || [];
     return `<div class="change">
       <div><span class="tag">${esc(r.kindLabel)}</span> ${opts.showProv ? link(r.prov, r.provLabel) + ' ' : ''}<span class="muted">比べた期間 ${esc(r.start)}〜${esc(r.end)}</span></div>
-      ${foundHtml(found[r.ch], true)}
+      ${foundHtml(found[r.ch], true, r.start)}
       ${(rvs[r.ch] || []).map(v => `<div class="note">${esc(v.rvWho)}が読んで確かめた(${esc(v.rvDate)}): ${esc(v.rvRes)}${v.rvReason ? '。理由: ' + esc(v.rvReason) : ''}${v.rvNote ? '。メモ: ' + esc(v.rvNote) : ''}</div>`).join('')}
       ${cl.length ? `<p>移った先の候補(一つに決まらない): ${cl.map(c => link(c.cand, c.candLabel)).join('、')}</p>` : ''}
       <div class="cols">
