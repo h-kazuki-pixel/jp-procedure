@@ -95,6 +95,16 @@ for i, c in enumerate(cols):
     w.s(COLP[c], [('a', 'owl:ObjectProperty' if obj else 'owl:DatatypeProperty'), ('rdfs:label', lit(c, 'ja')), ('rdfs:comment', lit(f'R7 調査結果の {i+1} 列目', 'ja')), ('rdfs:domain', 'jpp:SurveyRecord')])
 w.s('jpp:lawRevision', [('rdfs:comment', lit('値は e-Gov の法令履歴ID で、{法令ID}_{YYYYMMDD}_{改正法令の法令ID} の形。YYYYMMDD は施行期日で、eli:version_date にも同じ日付を入れた。改正法令の部分が 000000000000000 の版(このデータで 1,360、scripts/66_check_versions.py)は、e-Gov の説明では初めの版か基準日の版で、その日付が施行期日か基準日かを、このデータでは見分けていない。', 'ja'))])
 w.s('jpp:SurveyRecord', [('rdfs:comment', lit('元のデータ(デジタル庁の調査結果)から変えた点: 自由記述の列にあった個人の連絡先(個人の氏名・個人あての電話番号・メールアドレス)は「' + redact.MARK + '」に置き換えた。部署の名前や代表の窓口は残した。伏せた所の一覧(手続ID・列・位置。中身は書かない)は data/redactions.csv。人名は機械で拾いきれず残りうるので、見つけたら Issue で知らせてほしい。', 'ja'))])
+# 毎週の追跡(scripts/70_weekly_track.py)が書くもの(第 2 版: 公開しているデータの文言と今の e-Gov を比べる)
+for p, lab, kind in [('foundRevision', '見つけた改正(毎週の追跡。新しい文言の版の改正。法令番号・公布日・施行期日は e-Gov の値)', 'Object'),
+                     ('foundOn', '改正の記録を見つけた日(毎週の追跡を流した日)', 'Datatype'),
+                     ('enforcedBeforePeriod', '見つけた改正の施行期日が、比べた期間の始め以前(e-Gov が施行日より遅れて本文を載せた改正)', 'Datatype'),
+                     ('promulgationDate', '改正法令の公布日(e-Gov の amendment_promulgate_date)', 'Datatype')]:
+    w.s(f'jpp:{p}', [('a', f'owl:{kind}Property'), ('rdfs:label', lit(lab, 'ja'))])
+w.s('jpp:enforcedBeforePeriod', [('rdfs:range', 'xsd:boolean'), ('rdfs:comment', lit('値は true だけを書く(施行期日が期間の中にあるときは書かない)。このときも改正の記録は見つけた週の期間に置き、施行期日が期間の外なので jpp:lawRevisionInPeriod には結ばない。', 'ja'))])
+w.s('jpp:ProvisionChange', [('rdfs:comment', lit('毎週の追跡(scripts/70_weekly_track.py、data/rdf/weekly/)の記録は、公開しているデータの文言(jpp:oldVersion は公開しているデータの版を指す)と、その日の e-Gov の本文(jpp:newVersion)の違い。'
+                                                  'e-Gov は施行日より遅れて本文を載せることがあるので、見つけた改正(jpp:foundRevision)の施行期日が期間の始め以前のことがある(jpp:enforcedBeforePeriod true)。'
+                                                  'e-Gov が版の ID を変えずに本文を直したもの(版を変えない直し)は改正の記録にせず、data/tracking/egov_corrections.csv に残す。公開しているデータの文言は直さない。', 'ja'))])
 cnt['vocab'] = w.close()
 
 # ---------- 出典(PROV-O)

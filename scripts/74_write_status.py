@@ -9,7 +9,10 @@ status.json の中身:
   last_checked … 最後に確かめた日(data/tracking/state.json の checked_through。e-Gov の更新をこの日まで見た)
   base         … 初めに比べた期間
   weeks        … 週ごとの結果。期間、確かめた日時(UTC)、足した改正の記録の件数(0 件を含む)、手続の行、期間内の改正の数、取得の失敗、確かめの結果、
-                 その時点で確かめられなかった日と法令の数(unconfirmed_days・unconfirmed_laws)
+                 その時点で確かめられなかった日と法令の数(unconfirmed_days・unconfirmed_laws)、
+                 更新データ(一括ダウンロード)の日ごとの結果(days。取れなかった日で、法令API v1 の更新法令一覧が 0 件の日は「更新法令なし(v1 の一覧で 0 件)」)、
+                 v1 の一覧の件数と更新データの行数が合わなかった日(v1_mismatch。合わない日があるときだけ)、
+                 新しく見つけた版を変えない直し(e-Gov)の数(egov_corrections。一覧は data/tracking/egov_corrections.csv)
   unconfirmed  … いま確かめられていない日(e-Gov の更新データを取れなかった日)と法令(本文を取れなかった法令)の一覧。両方 0 のときは置かない。
                  次の実行でもう一度取る(scripts/70_weekly_track.py の pending_days・failed_laws)
 確かめが通らなかった週は、ワークフローが main に入れないので、ここには残らない(Issue が立つ)。
@@ -36,9 +39,11 @@ if not A.readme_only:
     run = json.load(open(f'{A.tracking}/last_run.json', encoding='utf-8'))
     wk = {'period': run['period'], 'checked_at': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
           'records': run['records'], 'rows': run['rows'], 'revisions': run.get('revisions', 0), 'failures': len(run.get('failures') or []), 'checks': A.checks,
-          'unconfirmed_days': len(run.get('unconfirmed_days') or []), 'unconfirmed_laws': len(run.get('unconfirmed_laws') or [])}
+          'unconfirmed_days': len(run.get('unconfirmed_days') or []), 'unconfirmed_laws': len(run.get('unconfirmed_laws') or []),
+          'days': run.get('days') or {}, 'egov_corrections': len(run.get('corrections_new') or [])}
+    if run.get('v1_mismatch'): wk['v1_mismatch'] = run['v1_mismatch']
     days, laws = sorted(state.get('pending_days', {})), sorted(state.get('failed_laws', {}))
-    if days or laws: st['unconfirmed'] = {'days': days, 'laws': laws, 'note': '確かめられなかった日(e-Gov の更新データを取れなかった日。「更新なし」とはみなさない)と、本文を取れなかった法令。次の実行でもう一度取る'}
+    if days or laws: st['unconfirmed'] = {'days': days, 'laws': laws, 'note': '確かめられなかった日(e-Gov の更新データを取れず、法令API v1 の更新法令一覧でも 0 件と確かめられなかった日。「更新なし」とはみなさない)と、本文を取れなかった法令。次の実行でもう一度取る'}
     else: st.pop('unconfirmed', None)
     st['weeks'] = [w for w in st['weeks'] if w['period'] != wk['period']] + [wk]
     st['last_checked'] = state['checked_through']

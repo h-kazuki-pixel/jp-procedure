@@ -45,6 +45,9 @@
 
 `70_weekly_track.py` は、公開用のリポジトリの形(`data/rdf/`、`data/tracking/`)の上で動きます。使い方はスクリプトの先頭にあります。GitHub Actions のワークフローは `../.github/workflows/weekly-track.yml` です。
 
+- 旧い側は、いつも公開しているデータの文言(`data/rdf` と `data/rdf/weekly/` の本文の版のうち最も新しいもの)です。e-Gov に前回の日付で取り直しません。区分を決めるのに要る旧い版の本文は、公開しているデータの版の ID で取ります(文言が違う条・項・号のある法令だけ)。
+- 版の ID が同じで文言だけが違うもの(e-Gov の版を変えない直し)は記録にせず、`data/tracking/egov_corrections.csv` に足します。
+- 更新データが取れなかった日は、法令API v1 の更新法令一覧を引き、0 件なら「更新法令なし(v1 の一覧で 0 件)」として外します(`last_run.json` の `days`・`no_update_days`)。取れた日も v1 の件数と比べます(`v1_mismatch`)。
 - 取れなかった日・法令は `data/tracking/state.json` の `pending_days`・`failed_laws` に残し、次の実行で取り直します(取れなかった実行の比べ始めから比べる)。取れた分の記録は書き、確かめた日は進めます。
 - 取れなかったもの・比べられなかった条項号の中身は `data/tracking/last_run.json`(`skipped`・`long_pending`)にあります。
-- 試し: 作業フォルダの `88_test_weekly_failures.py` が、偽の e-Gov(500 の日、404 の法令)で上のとおりに動くことを確かめます(公開用には入れていない)。
+- 試し: 作業フォルダの `88_test_weekly_failures.py` が、偽の e-Gov(500 の日、v1 の 0 件・取れない日・件数の合わない日、404 の法令、版を変えない直し)で上のとおりに動くことを確かめます(公開用には入れていない)。

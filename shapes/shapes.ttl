@@ -59,6 +59,9 @@ jpp:ChangeShape a sh:NodeShape ; sh:targetClass jpp:ProvisionChange ; sh:name "�
   sh:property [ sh:path jpp:affects ; sh:minCount 1 ; sh:nodeKind sh:IRI ] ;
   sh:property [ sh:path prov:wasGeneratedBy ; sh:minCount 1 ; sh:maxCount 1 ; sh:class prov:Activity ] ;
   sh:property [ sh:path jpp:lawRevisionInPeriod ; sh:class jpp:LawRevision ] ;
+  sh:property [ sh:path jpp:foundRevision ; sh:maxCount 1 ; sh:class jpp:LawRevision ; sh:name "見つけた改正(毎週の追跡)は 1 つまで" ] ;
+  sh:property [ sh:path jpp:foundOn ; sh:maxCount 1 ; sh:datatype xsd:date ] ;
+  sh:property [ sh:path jpp:enforcedBeforePeriod ; sh:maxCount 1 ; sh:in ( true ) ; sh:name "施行期日が期間の始め以前の印は true だけ" ] ;
   sh:property [ sh:path jpp:review ; sh:nodeKind sh:IRI ] ;
   sh:or ( [ sh:property [ sh:path jpp:changeKind ; sh:not [ sh:in ( <https://w3id.org/jp-procedure/code/change-kind/swapped-moved> <https://w3id.org/jp-procedure/code/change-kind/removed-moved> ) ] ] ]
           [ sh:property [ sh:path jpp:movedTo ; sh:minCount 1 ; sh:maxCount 1 ] ] ) ;
@@ -66,7 +69,8 @@ jpp:ChangeShape a sh:NodeShape ; sh:targetClass jpp:ProvisionChange ; sh:name "�
           [ sh:property [ sh:path jpp:candidate ; sh:minCount 2 ] ; sh:property [ sh:path jpp:movedTo ; sh:maxCount 0 ] ] ) .
 jpp:RevisionShape a sh:NodeShape ; sh:targetClass jpp:LawRevision ; sh:name "期間内の改正" ;
   sh:property [ sh:path jpp:revisionOf ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalResource ] ;
-  sh:property [ sh:path jpp:enforcementDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ; sh:name "施行期日(記録の期間の中にあるかは scripts/57_count_checks.py で確かめる)" ] .
+  sh:property [ sh:path jpp:enforcementDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ; sh:name "施行期日(記録の期間の中にあるかは scripts/57_count_checks.py で確かめる)" ] ;
+  sh:property [ sh:path jpp:promulgationDate ; sh:maxCount 1 ; sh:datatype xsd:date ] .
 jpp:ReviewShape a sh:NodeShape ; sh:targetClass jpp:Review ; sh:name "区分を確かめた記録" ;
   sh:property [ sh:path jpp:reviewerType ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/reviewer-type/other-ai> <https://w3id.org/jp-procedure/code/reviewer-type/human> ) ] ;
   sh:property [ sh:path jpp:reviewDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] ;

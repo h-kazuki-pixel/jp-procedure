@@ -174,6 +174,6 @@
   "ministries": "queries/q3_changed_by_ministry.rq"
  },
  "note": "notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた",
- "data_sha256": "dea967b0f75df98fba0d2a26e5403450d6a2c91720c0c0d3ce1fe0801a16f169",
+ "data_sha256": "8f0b662e10a600db2cc371f4e64ec52970b2ced2b276adc299e3952f7aab5da9",
  "data_files": 10
 }
