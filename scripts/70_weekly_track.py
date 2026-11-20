@@ -18,7 +18,11 @@
     同じ版の ID なら jpp:asOf だけを足す)。違えば改正の記録にする。今も取れなければ failed_laws に残す。
   - 移った先の条・項・号にも、新しい版(文言)を書く(閲覧ページで移った先の文言を出すため)。
   - 改正の記録には、新しい文言の版の改正(jpp:foundRevision。法令番号・公布日・施行期日は e-Gov の値)と、見つけた日(jpp:foundOn)を書く。
-    その改正の施行期日が比べた期間の始め以前(e-Gov が遅れて載せた改正)なら jpp:enforcedBeforePeriod true を付ける。記録は見つけた週の期間に置く。
+    その改正を週の追跡が初めて足し(公開しているデータに無く、jpp:firstFoundOn を付ける)、施行期日が比べた期間の始め以前のとき(e-Gov が遅れて載せた改正)だけ、
+    jpp:enforcedBeforePeriod true を付ける。記録は見つけた週の期間に置く。
+  - 公開しているデータに新しい版が無かった条・項・号の記録には、あとで比べた理由(jpp:recheckReason)を書く:
+    その法令に 2026-11-18 の版が 1 つも無い → 初めに版を取れなかった(code/recheck-reason/version-missing)。
+    その法令にはある → 初めの比べで位置を決められなかった(code/recheck-reason/position-undetermined)。
 取れなかったもの:
   - 更新データ(一括ダウンロード)が取れなかった日(状態が 200 でない・zip でない)は、法令API v1 の更新法令一覧(/api/1/updatelawlists/{日付})を引く。
     「取得結果が０件」なら「更新法令なし(v1 の一覧で 0 件)」として取り直しの対象から外す(e-Gov の説明に、更新の無い日の返し方の明記は無い。
@@ -212,6 +216,8 @@ bulk_laws = {u[0] for u in upd}
 due_laws = {r['law_id'] for r in REV.values() if start_all < (r['amendment_enforcement_date'] or '') <= end}
 # 公開しているデータに初めの比べの終わり(2026-11-18)以後の版が無く、無くなったの記録も無い条・項・号の法令は、更新データに出たかどうかによらず毎回の対象にする
 stale_laws = {pv.split('/')[1] for pv in cited if pub_state(pv)[0] == 'stale'}
+laws_with_new = {x['pv'].split('/')[1] for x in ex_info.values() if x.get('pv', '').startswith('provision/') and any(a >= BASE_END for a in x['asof'])}
+def recheck_reason(lid): return 'position-undetermined' if lid in laws_with_new else 'version-missing'
 targets = (bulk_laws | (set() if A.only_bulk else due_laws) | set(state['failed_laws']) | stale_laws) & set(by_law)
 say(f'# 期間 {start_all} 〜 {end}: 更新データの法令 {len(bulk_laws)}、施行日が来た改正のある法令 {len(due_laws)}、前回取れなかった法令 {len(state["failed_laws"])}、'
     f'公開しているデータに {BASE_END} 以後の版が無い法令 {len(stale_laws)} → このデータが使う法令 {len(targets)}')
@@ -284,7 +290,7 @@ for lid in sorted(targets):
             cnt['文言が同じ(e-Gov の直しを除くと)'] += 1; continue
         if x['kind'] == '比べられない': cnt['比べられない'] += 1; skipped.append({'law': lid, 'provisions': [pv], 'reason': '比べられない: ' + x.get('rule', '')}); continue
         cnt[x['kind']] += 1
-        recs.append(dict(lid=lid, pv=pv, procs=sorted(procs), start=start, end=end, old_ex=pex, nrv=nrv, ni=ni, p=p, dep=dep, **x))
+        recs.append(dict(lid=lid, pv=pv, procs=sorted(procs), start=start, end=end, old_ex=pex, nrv=nrv, ni=ni, p=p, dep=dep, recheck=recheck_reason(lid) if stale else None, **x))
     if bad: law_fail(f'本文が取れない(公開しているデータの版 {", ".join(sorted(k for k, v in olds.items() if v[0] is None))}: {", ".join(sorted({str(v[1]) for v in olds.values() if v[0] is None}))})', bad)
     else: state['failed_laws'].pop(lid, None); failed_since.pop(lid, None)
 say(f'  比べた結果(条・項・号): {dict(cnt)}')
@@ -372,7 +378,9 @@ if (recs or win_revs or vers_only) and not A.dry_run:
         pos += [('jpp:candidate', iri(x)) for x in dict.fromkeys(cands)] + [('jpp:r0', dec(r['r0'])), ('jpp:r1', dec(r['r1'])), ('prov:wasGeneratedBy', ACT)]
         pos += [('jpp:lawRevisionInPeriod', iri(f'law/{r["lid"]}/revision/{x}')) for x in revs]
         pos += [('jpp:foundRevision', iri(f'law/{r["lid"]}/revision/{found}') if found else None), ('jpp:foundOn', lit(end, dt='date')),
-                ('jpp:enforcedBeforePeriod', 'true' if found and fed and fed <= r['start'] else None)]
+                # 遅れて載った印: 改正そのものを週の追跡が初めて足し(公開しているデータに無い)、施行期日が期間の始め以前のときだけ
+                ('jpp:enforcedBeforePeriod', 'true' if found and found not in pub_revs and fed and fed <= r['start'] else None),
+                ('jpp:recheckReason', iri(f'code/recheck-reason/{r["recheck"]}') if r.get('recheck') else None)]
         pos += [('jpp:affects', iri(f'procedure/{p}')) for p in r['procs']]
         s(iri(f'change/{r["pv"][len("provision/"):]}/{per}'), pos)
     for v in vers_only:   # 公開しているデータに新しい版が無かった条・項・号で、今の文言が同じもの: 版だけ足す(jpp:asOf が取った日)
@@ -381,7 +389,7 @@ if (recs or win_revs or vers_only) and not A.dry_run:
         rr = REV[x]
         s(iri(f'law/{rr["law_id"]}/revision/{x}'), [('a', 'jpp:LawRevision'), ('dct:identifier', lit(x)), ('jpp:revisionOf', iri(f'law/{rr["law_id"]}')),
                                                     ('jpp:enforcementDate', lit(rr['amendment_enforcement_date'], dt='date') if rr['amendment_enforcement_date'] else None), ('jpp:amendmentLawNum', lit(rr['amendment_law_num']) if rr.get('amendment_law_num') else None),
-                                                    ('jpp:foundOn', lit(end, dt='date') if x not in pub_revs else None),   # このデータが初めて知った日(毎週の追跡が足した改正だけ)
+                                                    ('jpp:firstFoundOn', lit(end, dt='date') if x not in pub_revs else None),   # このデータが初めて知った日(毎週の追跡が足した改正だけ)
                                                     ('jpp:promulgationDate', lit(rr['amendment_promulgate_date'], dt='date') if re.fullmatch(r'\d{4}-\d{2}-\d{2}', rr.get('amendment_promulgate_date') or '') else None)])
     for path, lv, parent, l, num in newnodes:
         s(iri(path), [('a', 'eli:LegalResourceSubdivision'), ('eli:is_part_of', iri(parent)), ('eli:number', lit(num)), ('rdfs:label', lit(l, 'ja')), ('jpp:level', iri(f'code/level/{lv}')),

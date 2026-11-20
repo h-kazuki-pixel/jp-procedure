@@ -1,14 +1,14 @@
 # (7) 比べた期間ごとの、法令の単位で知らせた場合の手続の数。
 # 条以上で照合でき(照合の結果が 条まで・項まで・号まで)、根拠の法令に、その期間に見つけた改正(jpp:LawRevision)がある手続。
 # 期間に見つけた改正: その期間に施行期日がある改正と、その期間の改正の記録が見つけた改正(jpp:foundRevision)。
-# 毎週の追跡が初めて足した改正(jpp:foundOn。このデータが初めて知った日)は、見つけた日がその期間の終わりより後なら、施行期日がその期間にあっても数えない(その期間に比べたときには e-Gov に無かった)。
+# 毎週の追跡が初めて足した改正(jpp:firstFoundOn。このデータが初めて知った日)は、見つけた日がその期間の終わりより後なら、施行期日がその期間にあっても数えない(その期間に比べたときには e-Gov に無かった)。
 # 閲覧ページのはじめの画面の「法令の単位で知らせた場合との差」は、この数 ÷ (6) の知らせる手続。
 SELECT ?start ?end (COUNT(DISTINCT ?ps) AS ?law_level) WHERE {
   {
     ?per a dct:PeriodOfTime ; dcat:startDate ?start ; dcat:endDate ?end .
     ?r a jpp:LawRevision ; jpp:revisionOf ?law ; jpp:enforcementDate ?d .
     FILTER(?d > ?start && ?d <= ?end)
-    FILTER NOT EXISTS { ?r jpp:foundOn ?rf FILTER(?rf > ?end) }
+    FILTER NOT EXISTS { ?r jpp:firstFoundOn ?rf FILTER(?rf > ?end) }
   } UNION {
     ?fc jpp:foundRevision ?r ; dct:temporal ?per .
     ?per dcat:startDate ?start ; dcat:endDate ?end .

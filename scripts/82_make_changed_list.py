@@ -9,7 +9,7 @@
   - 移った先が一つに決まらない: 「第○条… → 候補 n 件」
   - 無くなった→移った先が見つからない・判定できない: 「同じ番号の要素が無い」
 - 毎週の追跡の記録には、見つけた改正(jpp:foundRevision の法令番号・公布日・施行期日)・見つけた日(jpp:foundOn)・
-  施行期日が比べた期間の始め以前か(jpp:enforcedBeforePeriod)を found に入れる(初めの期間の記録には無い)。
+  施行期日が比べた期間の始め以前か(jpp:enforcedBeforePeriod)・あとで比べた理由(jpp:recheckReason の notation)を found に入れる(初めの期間の記録には無い)。
 - 期間ごとの名前(periods。初めの期間・週)を置く(閲覧ページの一覧で期間を選ぶため)。
 - 並びは、区分の順(文言が変わった: それ以外、大きく書き換わった、文言が変わった: 番号の参照だけ、入れ替わった…、無くなった…)、法令名、条項号、手続ID。
 - 何度流しても、同じデータなら同じ中身になる(日時は入れない)。"""
@@ -39,9 +39,9 @@ def snip(c):
     _, i1, i2, j1, j2 = ops[0]
     return {'type': 'diff', 'before': a[max(0, i1 - CTX):i1], 'old': cut(a[i1:i2]), 'new': cut(b[j1:j2]), 'after': a[i2:i2 + CTX], 'more': len(ops) - 1}
 SN = {ch: snip(c) for ch, c in chs.items()}
-FOUND = {r['ch']: {'num': r['num'], 'prom': r['prom'], 'enf': r['enf'], 'on': r['on'], 'late': r['late'] == 'true'} for r in q('''SELECT ?ch ?num ?prom ?enf ?on ?late WHERE {
+FOUND = {r['ch']: {'num': r['num'], 'prom': r['prom'], 'enf': r['enf'], 'on': r['on'], 'late': r['late'] == 'true', **({'recheck': r['re']} if r['re'] else {})} for r in q('''SELECT ?ch ?num ?prom ?enf ?on ?late ?re WHERE {
   ?ch a jpp:ProvisionChange ; jpp:foundRevision ?r . ?r jpp:enforcementDate ?enf .
-  OPTIONAL { ?r jpp:amendmentLawNum ?num } OPTIONAL { ?r jpp:promulgationDate ?prom } OPTIONAL { ?ch jpp:foundOn ?on } OPTIONAL { ?ch jpp:enforcedBeforePeriod ?late } }''')}
+  OPTIONAL { ?r jpp:amendmentLawNum ?num } OPTIONAL { ?r jpp:promulgationDate ?prom } OPTIONAL { ?ch jpp:foundOn ?on } OPTIONAL { ?ch jpp:enforcedBeforePeriod ?late } OPTIONAL { ?ch jpp:recheckReason/skos:notation ?re } }''')}
 rows = q('''SELECT ?ch ?ps ?id ?title ?org ?lawLabel WHERE {
   ?ch a jpp:ProvisionChange ; jpp:affects ?ps . ?ps dct:identifier ?id ; dct:title ?title .
   OPTIONAL { ?ps cv:hasCompetentAuthority/skos:prefLabel ?org } OPTIONAL { ?ps jpp:hasCitation/jpp:citedLaw/rdfs:label ?lawLabel } }''')

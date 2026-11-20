@@ -105,6 +105,20 @@ w.s('jpp:enforcedBeforePeriod', [('rdfs:range', 'xsd:boolean'), ('rdfs:comment',
 w.s('jpp:ProvisionChange', [('rdfs:comment', lit('毎週の追跡(scripts/70_weekly_track.py、data/rdf/weekly/)の記録は、公開しているデータの文言(jpp:oldVersion は公開しているデータの版を指す)と、その日の e-Gov の本文(jpp:newVersion)の違い。'
                                                   'e-Gov は施行日より遅れて本文を載せることがあるので、見つけた改正(jpp:foundRevision)の施行期日が期間の始め以前のことがある(jpp:enforcedBeforePeriod true)。'
                                                   'e-Gov が版の ID を変えずに本文を直したもの(版を変えない直し)は改正の記録にせず、data/tracking/egov_corrections.csv に残す。公開しているデータの文言は直さない。', 'ja'))])
+# 足した日(dct:issued)。語彙は足すだけにする(今ある語の意味を変えない・消さない)
+for t in ['jpp:foundRevision', 'jpp:foundOn', 'jpp:enforcedBeforePeriod', 'jpp:promulgationDate']:
+    w.s(t, [('dct:issued', lit('2026-11-20', dt='date'))])
+w.s('jpp:firstFoundOn', [('a', 'owl:DatatypeProperty'), ('rdfs:label', lit('改正を初めて見つけた日(毎週の追跡がその改正を初めてこのデータに足した日)', 'ja')),
+    ('rdfs:comment', lit('改正(jpp:LawRevision)に付ける。初めのデータにある改正には付けない。この日が比べた期間の終わりより後の改正は、施行期日がその期間にあっても、その期間の「期間内の改正」に数えない(queries/q7_law_level_by_period.rq)。', 'ja')),
+    ('rdfs:range', 'xsd:date'), ('dct:issued', lit('2026-11-21', dt='date'))])
+w.s('jpp:recheckReason', [('a', 'owl:ObjectProperty'), ('rdfs:label', lit('あとで比べた理由(コード表 code/recheck-reason)', 'ja')),
+    ('rdfs:comment', lit('初めのデータ(2025-11-01〜2026-11-18 の比べ)に新しい版が無かった条・項・号を、毎週の追跡があとで比べて改正の記録にしたときに付ける。', 'ja')),
+    ('dct:issued', lit('2026-11-21', dt='date'))])
+w.s(iri('code/recheck-reason'), [('a', 'skos:ConceptScheme'), ('skos:prefLabel', lit('あとで比べた理由', 'ja')), ('dct:issued', lit('2026-11-21', dt='date'))])
+for k, lab, d in [('position-undetermined', '初めの比べで位置を決められなかった', '初めの比べで、2026-11-18 の版は取れたが、その条・項・号の位置(項の指定の無い号など)を決められなかった。'),
+                  ('version-missing', '初めに版を取れなかった', '初めの比べで、その法令の 2026-11-18 の版を取れなかった(e-Gov が 404 を返した・取っていない)。')]:
+    w.s(iri(f'code/recheck-reason/{k}'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/recheck-reason')), ('skos:notation', lit(k)), ('skos:prefLabel', lit(lab, 'ja')),
+        ('skos:definition', lit(d, 'ja')), ('dct:issued', lit('2026-11-21', dt='date'))])
 cnt['vocab'] = w.close()
 
 # ---------- 出典(PROV-O)

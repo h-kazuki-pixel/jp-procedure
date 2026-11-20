@@ -82,6 +82,7 @@ form.search .row > * { max-width: 100%; }
 .pager { display: flex; gap: 12px; align-items: center; }
 .small { font-size: .85rem; }
 .found { margin: 4px 0; }
+.late.recheck { color: var(--fg); background: var(--line); }
 .late { display: inline-block; font-size: .8rem; font-weight: bold; color: var(--del-fg); background: var(--del-bg); border-radius: 4px; padding: 0 6px; margin-right: 4px; }
 footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85rem; color: var(--muted); }
 @media (max-width: 760px) {
@@ -163,11 +164,14 @@ const PS = `?per dcat:startDate ${D(CONFIG.period.start)} ; dcat:endDate ${D(CON
 let seq = 0;   // 画面を移ったあとに古い答えで描かないため
 const ymd = d => { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[1]} 年 ${+m[2]} 月 ${+m[3]} 日` : esc(d); };
 const md = d => { const m = String(d || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? `${+m[1]} 月 ${+m[2]} 日` : esc(d); };
-// 毎週の追跡が見つけた改正(jpp:foundRevision)。f = {num, prom, enf, on, late}
+// 毎週の追跡が見つけた改正(jpp:foundRevision)。f = {num, prom, enf, on, late, recheck}
+// late: 改正そのものを週の追跡が初めて足し、施行日が比べた期間より前(e-Gov が遅れて載せた)。recheck: あとで比べた理由(code/recheck-reason の notation)
+const RECHECK = { 'position-undetermined': '初めの比べで位置を決められず', 'version-missing': '初めに版を取れず' };
 function foundHtml(f, full) {
   if (!f) return '';
   const rev = `${f.num ? esc(f.num) : '(法令番号なし)'}` + (full ? `(${f.prom ? '公布 ' + esc(f.prom) + '・' : ''}施行 ${esc(f.enf)})` : '');
-  const late = f.late ? `<span class="late">遅れて載った改正</span> 施行は ${ymd(f.enf)}(比べた期間より前)。e-Gov に載ったのを見つけたのは ${md(f.on)}。` : '';
+  const re = f.recheck ? `<span class="late recheck">あとで比べた</span> ${f.late ? '' : 'この改正は初めのデータにあります。'}この条・項・号は${RECHECK[f.recheck] || 'あとで比べることになり'}、${esc(f.on)} に比べ直しました。` : '';
+  const late = (f.late ? `<span class="late">遅れて載った改正</span> 施行は ${ymd(f.enf)}(比べた期間より前)。e-Gov に載ったのを見つけたのは ${md(f.on)}。` : '') + (f.late && re ? '<br>' : '') + re;
   return full ? `<p class="found">見つけた改正(新しい文言の版の改正): ${rev}${f.on && !f.late ? `。見つけた日 ${esc(f.on)}` : ''}</p>${late ? `<div class="note">${late}</div>` : ''}`
               : `${rev}${late ? `<br>${late}` : ''}`;
 }
@@ -451,28 +455,35 @@ async function changeBlocks(where, my, opts = {}) {
     OPTIONAL { ?ch jpp:oldVersion ?old . ?old jpp:text ?oldText . }
     OPTIONAL { ?ch jpp:newVersion ?new . ?new jpp:text ?newText . }
     OPTIONAL { ?ch jpp:movedTo ?moved . ?moved rdfs:label ?movedLabel }
-  } ORDER BY ?start ?provLabel`), sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote ?movedText ?frev ?fEnf ?fNum ?fProm ?fOn ?fLate WHERE {
+  } ORDER BY ?start ?provLabel`), sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote ?movedText ?movedAsOf ?frev ?fEnf ?fNum ?fProm ?fOn ?fLate ?fRe ?oa ?na WHERE {
     ${where}
     { ?ch jpp:candidate ?cand . ?cand rdfs:label ?candLabel } UNION
     { ?ch jpp:lawRevisionInPeriod ?rev . ?rev jpp:enforcementDate ?revDate . OPTIONAL { ?rev jpp:amendmentLawNum ?revNum } } UNION
     { ?ch jpp:foundRevision ?frev . ?frev jpp:enforcementDate ?fEnf . OPTIONAL { ?frev jpp:amendmentLawNum ?fNum } OPTIONAL { ?frev jpp:promulgationDate ?fProm }
-      OPTIONAL { ?ch jpp:foundOn ?fOn } OPTIONAL { ?ch jpp:enforcedBeforePeriod ?fLate } } UNION
+      OPTIONAL { ?ch jpp:foundOn ?fOn } OPTIONAL { ?ch jpp:enforcedBeforePeriod ?fLate } OPTIONAL { ?ch jpp:recheckReason/skos:notation ?fRe } } UNION
+    { ?ch jpp:oldVersion/jpp:asOf ?oa } UNION { ?ch jpp:newVersion/jpp:asOf ?na } UNION
     { ?ch jpp:review ?rv . ?rv jpp:reviewerType/skos:prefLabel ?rvWho ; jpp:reviewDate ?rvDate ; jpp:reviewResult/skos:prefLabel ?rvRes . OPTIONAL { ?rv jpp:reviewReason ?rvReason } OPTIONAL { ?rv jpp:reviewNote ?rvNote } } UNION
-    { ?ch jpp:movedTo ?moved ; dct:temporal/dcat:endDate ?end . ?moved eli:is_realized_by ?mv . ?mv jpp:asOf ?end ; jpp:text ?movedText } } ORDER BY ?revDate ?rvDate`)]);
+    { ?ch jpp:movedTo ?moved ; dct:temporal/dcat:endDate ?end . ?moved eli:is_realized_by ?mv . ?mv jpp:asOf ?end ; jpp:text ?movedText . BIND(?end AS ?movedAsOf) } } ORDER BY ?revDate ?rvDate`)]);
   if (my !== seq || !rows.length) return rows.length ? '' : null;
   const seen = new Map(); for (const r of rows) if (!seen.has(r.ch)) seen.set(r.ch, r);
   const chs = [...seen.values()];
-  for (const x of extra) if (x.movedText && seen.has(x.ch)) seen.get(x.ch).movedText = x.movedText;
+  for (const x of extra) if (x.movedText && seen.has(x.ch)) Object.assign(seen.get(x.ch), { movedText: x.movedText, movedAsOf: x.movedAsOf });
+  // 見出しの日付は、出している版の確かめた日(jpp:asOf)から作る。旧い版: 期間の始め以前で最も新しい日。新しい版: 期間の終わり以前で最も新しい日
+  const oas = {}, nas = {};
+  for (const x of extra) { if (x.oa) (oas[x.ch] ||= []).push(x.oa); if (x.na) (nas[x.ch] ||= []).push(x.na); }
+  const pick = (ds, lim) => { const a = (ds || []).filter(d => d <= lim).sort(); return a.length ? a[a.length - 1] : ((ds || []).sort().slice(-1)[0] || ''); };
+  for (const r of chs) { r.oldAsOf = pick(oas[r.ch], r.start); r.newAsOf = pick(nas[r.ch], r.end); }
   if (my !== seq) return '';
   const cands = {}, revs = {}, rvs = {};
   const found = {};
   for (const x of extra) { if (x.cand) (cands[x.ch] ||= []).push(x); if (x.rev) (revs[x.ch] ||= []).push(x); if (x.rv) (rvs[x.ch] ||= []).push(x);
-    if (x.frev) found[x.ch] = { num: x.fNum, prom: x.fProm, enf: x.fEnf, on: x.fOn, late: x.fLate === 'true' }; }
+    if (x.frev) found[x.ch] = { num: x.fNum, prom: x.fProm, enf: x.fEnf, on: x.fOn, late: x.fLate === 'true', recheck: x.fRe }; }
   return chs.map(r => {
     const moved = !!r.moved, oldT = r.oldText || '', newT = moved ? (r.movedText || '') : (r.newText || '');
     let L = esc(oldT), R = esc(newT);
     if (r.oldText && (moved ? r.movedText : r.newText)) [L, R] = diffText(oldT, newT);
-    const rightTitle = moved ? `移った先 ${link(r.moved, r.movedLabel)} の文言(${esc(r.end)} 時点)` : `新しい文言(${esc(r.end)} 時点)`;
+    const at = d => d ? `(${esc(d)} 時点)` : '';
+    const rightTitle = moved ? `移った先 ${link(r.moved, r.movedLabel)} の文言${at(r.movedAsOf)}` : `新しい文言${at(r.newAsOf)}`;
     const rightBody = (moved ? r.movedText : r.newText) ? R : (moved ? '(移った先の文言は、このデータにありません。e-Gov で確かめてください)' : r.kind.includes('removed') ? '(この番号の条・項・号は、新しい版にありません)' : '(新しい文言はありません)');
     const cl = cands[r.ch] || [], rv = revs[r.ch] || [];
     return `<div class="change">
@@ -481,7 +492,7 @@ async function changeBlocks(where, my, opts = {}) {
       ${(rvs[r.ch] || []).map(v => `<div class="note">${esc(v.rvWho)}が読んで確かめた(${esc(v.rvDate)}): ${esc(v.rvRes)}${v.rvReason ? '。理由: ' + esc(v.rvReason) : ''}${v.rvNote ? '。メモ: ' + esc(v.rvNote) : ''}</div>`).join('')}
       ${cl.length ? `<p>移った先の候補(一つに決まらない): ${cl.map(c => link(c.cand, c.candLabel)).join('、')}</p>` : ''}
       <div class="cols">
-        <div><h3>旧い文言(${esc(r.start)} 時点)</h3><div class="text">${r.oldText ? L : '(旧い文言はありません)'}</div></div>
+        <div><h3>旧い文言${at(r.oldAsOf)}</h3><div class="text">${r.oldText ? L : '(旧い文言はありません)'}</div></div>
         <div><h3>${rightTitle}</h3><div class="text">${rightBody}</div></div>
       </div>
       <p class="muted legend">違う所: <del>旧い文言だけにある文字</del> <ins>新しい文言だけにある文字</ins>(文字の単位で機械が印を付けた。長い文は文の単位)</p>

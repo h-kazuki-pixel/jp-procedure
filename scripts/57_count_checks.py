@@ -25,7 +25,7 @@ for n in SRC:
         if t in CHSET: CHSET.discard(t); OVERLAP[n] += 1
     REPARSE[n] = c
 REPARSE['changes'] = len(CHSET); del CHSET
-rev_found = {}   # 毎週の追跡が初めて足した改正 → 見つけた日(jpp:foundOn)。見つけた日が期間の終わりより後なら、その期間の「期間内の改正」には数えない
+rev_found = {}   # 毎週の追跡が初めて足した改正 → 初めて見つけた日(jpp:firstFoundOn)。見つけた日が期間の終わりより後なら、その期間の「期間内の改正」には数えない
 t0 = time.time()
 CHG = set()   # changes の回(X・Xc・Ew)のトリプル(rdflib)。ほかの回にあるものは後で除く
 typ = collections.defaultdict(set); typ_ex = set(); wreal = set(); wasof = collections.defaultdict(set); per_of = {}; objs = collections.defaultdict(list); ident = []; asof = collections.Counter(); real = set(); realized_by = set()
@@ -63,9 +63,9 @@ for src, files in SRC.items():
                                aff=list(g.objects(ch, JPP.affects)), revs=list(g.objects(ch, JPP.lawRevisionInPeriod)), moved=g.value(ch, JPP.movedTo))
             for rv in g.subjects(RDF.type, JPP.LawRevision): rev_of[rv] = g.value(rv, JPP.revisionOf); rev_date[rv] = str(g.value(rv, JPP.enforcementDate))
             for rv in g.subjects(RDF.type, JPP.LawRevision):
-                if g.value(rv, JPP.foundOn) is not None: rev_found[rv] = str(g.value(rv, JPP.foundOn))
+                if g.value(rv, JPP.firstFoundOn) is not None: rev_found[rv] = str(g.value(rv, JPP.firstFoundOn))
             for ch in g.subjects(RDF.type, JPP.ProvisionChange):
-                chg[ch].update(found=g.value(ch, JPP.foundRevision), found_on=str(g.value(ch, JPP.foundOn) or ''), before=g.value(ch, JPP.enforcedBeforePeriod))
+                chg[ch].update(found=g.value(ch, JPP.foundRevision), found_on=str(g.value(ch, JPP.foundOn) or ''), before=g.value(ch, JPP.enforcedBeforePeriod), recheck=g.value(ch, JPP.recheckReason))
             for rv in g.subjects(RDF.type, JPP.LawRevision): rev_id[rv] = str(g.value(rv, DCT.identifier))
             for rv in g.subjects(RDF.type, JPP.Review): reviews[rv] = (str(g.value(rv, JPP.reviewerType)).rsplit('/', 1)[-1], str(g.value(rv, JPP.reviewResult)).rsplit('/', 1)[-1])
             review_ref.update(g.objects(None, JPP.review))
@@ -178,7 +178,8 @@ if W:
     for x, r_ in lawrev.items(): nv_rev[x] = r_
     chk('見つけた改正の版の ID = 新しい版の版の ID(新しい版があるとき)', all(v['new'] is None or nv_rev.get(v['new']) == rev_id.get(v['found']) for v in W.values()), True)
     chk('見つけた日 = 期間の終わり', all(v.get('found_on') == per_of[k].split('_')[1] for k, v in W.items()), True)
-    chk('施行期日が期間の始め以前の印(jpp:enforcedBeforePeriod)が、見つけた改正の施行期日が期間の始め以前の記録にだけある', all((v.get('before') is not None) == (rev_date.get(v['found'], '9999') <= per_of[k].split('_')[0]) for k, v in W.items()), True)
+    chk('遅れて載った印(jpp:enforcedBeforePeriod)が、見つけた改正を週の追跡が初めて足し(jpp:firstFoundOn)、その施行期日が期間の始め以前の記録にだけある', all((v.get('before') is not None) == (v['found'] in rev_found and rev_date.get(v['found'], '9999') <= per_of[k].split('_')[0]) for k, v in W.items()), True)
+    chk('あとで比べた理由(jpp:recheckReason)は、旧い版に 2026-11-18 以後の確かめた日が無い(初めのデータに新しい版が無かった)記録にだけある', all((v.get('recheck') is not None) == (max(allasof[v['old']]) < '2026-11-18') for k, v in W.items()), True)
     chk('移った先のある記録は、移った先に期間の終わりの版(文言)がある', all(v['moved'] is None or any((e_, v['moved']) in allreal and per_of[k].split('_')[1] in allasof[e_] for e_ in vers_of[v['moved']]) for k, v in W.items()), True)
     added = {x for x, a in wasof.items() if x in ex_asof}   # 公開しているデータの版に、毎週の追跡が確かめた日だけを足したもの
     print(f'     毎週の追跡が確かめた日だけを足した版: {len(added):,}(新しく書いた版 {len([x for x in wasof if x not in ex_asof]):,})')
