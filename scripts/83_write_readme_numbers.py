@@ -24,8 +24,8 @@ N['versions_zero'] = one('SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ?s a eli:Leg
 N['changes'] = one('SELECT (COUNT(DISTINCT ?c) AS ?n) WHERE { ?c a jpp:ProvisionChange }')
 N['change_rows'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:ProvisionChange ; jpp:affects ?p }')
 BASE = '?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date .'
-# 初めの期間の改正: 施行期日がその期間の中にある改正。毎週の追跡が遅れて見つけた改正(jpp:enforcedBeforePeriod true の記録の見つけた改正)は除く(初めに比べたときには e-Gov に無かった)
-LATE = ' FILTER NOT EXISTS { ?late jpp:foundRevision ?r ; jpp:enforcedBeforePeriod true }'
+# 初めの期間の改正: 施行期日がその期間の中にある改正。毎週の追跡が初めて足した改正で、見つけた日(jpp:foundOn)が期間の終わりより後のものは除く(初めに比べたときには e-Gov に無かった)
+LATE = ' FILTER NOT EXISTS { ?r jpp:foundOn ?rf FILTER(?rf > "2026-11-18"^^xsd:date) }'
 N['revisions'] = one('SELECT (COUNT(DISTINCT ?r) AS ?n) WHERE { ?r a jpp:LawRevision ; jpp:enforcementDate ?d FILTER(?d > "2025-11-01"^^xsd:date && ?d <= "2026-11-18"^^xsd:date)' + LATE + ' }')
 N['revision_laws'] = one('SELECT (COUNT(DISTINCT ?l) AS ?n) WHERE { ?r a jpp:LawRevision ; jpp:revisionOf ?l ; jpp:enforcementDate ?d FILTER(?d > "2025-11-01"^^xsd:date && ?d <= "2026-11-18"^^xsd:date)' + LATE + ' }')
 N['revisions_linked'] = one(f'SELECT (COUNT(DISTINCT ?r) AS ?n) WHERE {{ ?c a jpp:ProvisionChange ; dct:temporal ?per ; jpp:lawRevisionInPeriod ?r . {BASE} }}')

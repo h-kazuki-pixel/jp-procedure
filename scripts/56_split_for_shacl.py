@@ -124,6 +124,11 @@ with gzip.open(f'{OUT}/typeindex.ttl.gz', 'wt', encoding='utf-8') as f:
         for line in gzip.open(f'{OUT}/{fn}.ttl.gz', 'rt', encoding='utf-8'):
             m = TY.match(line)
             if m: f.write(f'<{m.group(1)}> a {m.group(2)} .\n'); n += 1
+    # 改正の記録の移った先・候補として足した条・項・号(X の回にある)の型も入れる。毎週の追跡が、その版(eli:realizes の先)を本文の版の回に書くため
+    for fn in [f'X{k}' for k in range(len(eb))]:
+        for line in gzip.open(f'{OUT}/{fn}.ttl.gz', 'rt', encoding='utf-8'):
+            m = TY.match(line)
+            if m and m.group(2) == 'eli:LegalResourceSubdivision': f.write(f'<{m.group(1)}> a {m.group(2)} .\n'); n += 1
 log.append(f'typeindex: rdf:type {n:,} 行(コード表・組織・法令・条項号・改正の記録の区分など)')
 P = [f'P{k}' for k in range(len(pb))]; R = [f'R{k}' for k in range(len(pb))]; S = [f'S{k}' for k in range(NB['S'])]; E = [f'E{k}' for k in range(len(eb))]
 own = [dict(name=x, data=[x, 'typeindex'], focus=[x], shapes=['ProcedureShape', 'CitationShape']) for x in P] + \

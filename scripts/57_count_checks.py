@@ -25,7 +25,7 @@ for n in SRC:
         if t in CHSET: CHSET.discard(t); OVERLAP[n] += 1
     REPARSE[n] = c
 REPARSE['changes'] = len(CHSET); del CHSET
-BASE_LATE = set()   # 毎週の追跡が遅れて見つけた改正(jpp:enforcedBeforePeriod true の記録の見つけた改正)。施行期日の入る前の期間の「期間内の改正」には数えない
+rev_found = {}   # 毎週の追跡が初めて足した改正 → 見つけた日(jpp:foundOn)。見つけた日が期間の終わりより後なら、その期間の「期間内の改正」には数えない
 t0 = time.time()
 CHG = set()   # changes の回(X・Xc・Ew)のトリプル(rdflib)。ほかの回にあるものは後で除く
 typ = collections.defaultdict(set); typ_ex = set(); wreal = set(); wasof = collections.defaultdict(set); per_of = {}; objs = collections.defaultdict(list); ident = []; asof = collections.Counter(); real = set(); realized_by = set()
@@ -60,9 +60,10 @@ for src, files in SRC.items():
             for ch in g.subjects(RDF.type, JPP.ProvisionChange):
                 pr = g.value(ch, DCT.temporal); per_of[ch] = str(pr).rsplit('/', 1)[-1]
                 chg[ch] = dict(prov=g.value(ch, JPP.provision), kind=str(g.value(ch, JPP.changeKind)).rsplit('/', 1)[-1], old=g.value(ch, JPP.oldVersion), new=g.value(ch, JPP.newVersion),
-                               aff=list(g.objects(ch, JPP.affects)), revs=list(g.objects(ch, JPP.lawRevisionInPeriod)))
+                               aff=list(g.objects(ch, JPP.affects)), revs=list(g.objects(ch, JPP.lawRevisionInPeriod)), moved=g.value(ch, JPP.movedTo))
             for rv in g.subjects(RDF.type, JPP.LawRevision): rev_of[rv] = g.value(rv, JPP.revisionOf); rev_date[rv] = str(g.value(rv, JPP.enforcementDate))
-            for ch in g.subjects(JPP.enforcedBeforePeriod, None): BASE_LATE.update(g.objects(ch, JPP.foundRevision))
+            for rv in g.subjects(RDF.type, JPP.LawRevision):
+                if g.value(rv, JPP.foundOn) is not None: rev_found[rv] = str(g.value(rv, JPP.foundOn))
             for ch in g.subjects(RDF.type, JPP.ProvisionChange):
                 chg[ch].update(found=g.value(ch, JPP.foundRevision), found_on=str(g.value(ch, JPP.foundOn) or ''), before=g.value(ch, JPP.enforcedBeforePeriod))
             for rv in g.subjects(RDF.type, JPP.LawRevision): rev_id[rv] = str(g.value(rv, DCT.identifier))
@@ -135,7 +136,7 @@ chk('新しい版があれば 2026-11-18 の版で、その条・項・号を re
 chk('新しい版が無いのは「無くなった」の記録だけ', all((v['new'] is None) == v['kind'].startswith('removed') for v in chg.values()), True)
 chk('期間内の改正が、その記録の法令のもの', all(str(rev_of[r]).split('/law/')[1] == str(v['prov']).split('/provision/')[1].split('/')[0] for v in chg.values() for r in v['revs']), True)
 chk('期間内の改正の施行期日が、その記録の期間の中にある', all(per_of[k].split('_')[0] < rev_date[r] <= per_of[k].split('_')[1] for k, v in chg.items() for r in v['revs']), True)
-base_rev = [r for r in rev_of if '2025-11-01' < rev_date[r] <= '2026-11-18' and r not in BASE_LATE]
+base_rev = [r for r in rev_of if '2025-11-01' < rev_date[r] <= '2026-11-18' and rev_found.get(r, '') <= '2026-11-18']
 chk('期間内の改正の節点の数(e-Gov の改正履歴で施行期日が 2025-11-02〜2026-11-18。改正の記録に結んでいないものも置く)', len(base_rev), 2840)
 chk('期間内の改正の節点の法令の数', len({rev_of[r] for r in base_rev}), 1252)
 chk('改正の節点の法令が、法令の中にある', {rev_of[r] for r in rev_of} <= law, True)
@@ -178,6 +179,9 @@ if W:
     chk('見つけた改正の版の ID = 新しい版の版の ID(新しい版があるとき)', all(v['new'] is None or nv_rev.get(v['new']) == rev_id.get(v['found']) for v in W.values()), True)
     chk('見つけた日 = 期間の終わり', all(v.get('found_on') == per_of[k].split('_')[1] for k, v in W.items()), True)
     chk('施行期日が期間の始め以前の印(jpp:enforcedBeforePeriod)が、見つけた改正の施行期日が期間の始め以前の記録にだけある', all((v.get('before') is not None) == (rev_date.get(v['found'], '9999') <= per_of[k].split('_')[0]) for k, v in W.items()), True)
+    chk('移った先のある記録は、移った先に期間の終わりの版(文言)がある', all(v['moved'] is None or any((e_, v['moved']) in allreal and per_of[k].split('_')[1] in allasof[e_] for e_ in vers_of[v['moved']]) for k, v in W.items()), True)
+    added = {x for x, a in wasof.items() if x in ex_asof}   # 公開しているデータの版に、毎週の追跡が確かめた日だけを足したもの
+    print(f'     毎週の追跡が確かめた日だけを足した版: {len(added):,}(新しく書いた版 {len([x for x in wasof if x not in ex_asof]):,})')
     print('     期間ごと:', dict(collections.Counter(per_of[k] for k in W)), '/ 施行期日が期間の始め以前の記録:', sum(1 for v in W.values() if v.get('before') is not None))
 # 期間ごとの数(閲覧ページのはじめの画面の数)。ここでは SPARQL を使わずに数え、stats.json(75_make_stats.py が問いで出したもの)があれば比べる
 print('\n# 期間ごとの数(改正の記録・知らせる手続・法令の単位で知らせた場合の手続)')
@@ -185,11 +189,11 @@ mine = {}
 for k, (ps0, pe0) in sorted(periods.items(), key=lambda x: x[1]):
     chs = [v for c, v in allchg.items() if per_of[c] == k]
     # 期間に見つけた改正: 施行期日が期間の中にある改正(遅れて見つけたものを除く)と、その期間の記録が見つけた改正(queries/q7 と同じ)
-    revl = {rev_of[r] for r in rev_of if ps0 < rev_date[r] <= pe0 and r not in BASE_LATE} | {rev_of[v['found']] for v in chs if v.get('found') is not None and v['found'] in rev_of}
+    revl = {rev_of[r] for r in rev_of if ps0 < rev_date[r] <= pe0 and rev_found.get(r, '') <= pe0} | {rev_of[v['found']] for v in chs if v.get('found') is not None and v['found'] in rev_of}
     ll = {p for p, c in cit_of.items() if cit_mr.get(c) in ('article', 'paragraph', 'item') and cit_law.get(c) in revl}
     nt = {a for v in chs for a in v['aff']}
     mine[(ps0, pe0)] = (len(chs), len(nt), len(ll))
-    print(f'     {ps0}〜{pe0}: 改正の記録 {len(chs):,} / 知らせる手続 {len(nt):,} / 法令の単位で知らせた場合の手続 {len(ll):,}(期間内の改正 {sum(1 for r in rev_of if ps0 < rev_date[r] <= pe0 and r not in BASE_LATE):,})')
+    print(f'     {ps0}〜{pe0}: 改正の記録 {len(chs):,} / 知らせる手続 {len(nt):,} / 法令の単位で知らせた場合の手続 {len(ll):,}(期間内の改正 {sum(1 for r in rev_of if ps0 < rev_date[r] <= pe0 and rev_found.get(r, '') <= pe0):,})')
     chk(f'{ps0}〜{pe0}: 知らせる手続が、法令の単位で知らせた場合の手続(期間に見つけた改正で数える)に含まれる', nt <= ll, True)
 STATS = os.environ.get('STATS')
 if STATS and os.path.exists(STATS):

@@ -13,6 +13,10 @@
     公開しているデータの版(law_revision_id)の本文を e-Gov から版の ID で取る(前回の日付では取らない)。
   - 版の ID が公開しているデータと同じで文言だけが違うもの(e-Gov が版を変えずに直したもの)は、改正の記録にせず、
     data/tracking/egov_corrections.csv に残す(公開しているデータの文言は直さない)。公開しているデータの版の本文を e-Gov が直していたときも同じ。
+  - 公開しているデータに 2026-11-18 以後の版が無く、「無くなった」の記録も無い条・項・号(初めの比べで e-Gov から新しい版が取れなかったものなど)は、
+    更新データに出たかどうかによらず毎回の対象にし、公開しているデータで最も新しい版と比べる。同じなら版だけを足す(jpp:asOf が取った日。
+    同じ版の ID なら jpp:asOf だけを足す)。違えば改正の記録にする。今も取れなければ failed_laws に残す。
+  - 移った先の条・項・号にも、新しい版(文言)を書く(閲覧ページで移った先の文言を出すため)。
   - 改正の記録には、新しい文言の版の改正(jpp:foundRevision。法令番号・公布日・施行期日は e-Gov の値)と、見つけた日(jpp:foundOn)を書く。
     その改正の施行期日が比べた期間の始め以前(e-Gov が遅れて載せた改正)なら jpp:enforcedBeforePeriod true を付ける。記録は見つけた週の期間に置く。
 取れなかったもの:
@@ -151,15 +155,16 @@ for fn in [f'{A.data}/provisions.ttl.gz', f'{A.data}/changes.ttl.gz'] + WEEKLY:
 # 公開しているデータの文言(旧い側): 本文の版(expressions と weekly/ の版)のうち jpp:asOf の最も新しいもの。無くなったと記録した(新しい版の無い改正の記録)のがそれより後なら「無い」
 UNESC = {'\\\\': '\\', '\\"': '"', '\\n': '\n', '\\r': '\r', '\\t': '\t'}
 def unesc(s): return re.sub(r'\\[\\"nrt]', lambda m: UNESC[m.group(0)], s)
-pub_ex = {}; pub_rm = {}   # 条・項・号 → (asOf, 版の path, law_revision_id, 文言) / 条・項・号 → 無くなったと記録した期間の終わり
+pub_ex = {}; pub_rm = {}; all_pub_ex = set(); pub_revs = set()   # pub_revs: 公開しているデータにある改正の節点(law_revision_id)   # 条・項・号 → (asOf, 版の path, law_revision_id, 文言) / 条・項・号 → 無くなったと記録した期間の終わり
 def read_pub():
     for fn in [f'{A.data}/expressions.ttl.gz', f'{A.data}/changes.ttl.gz'] + WEEKLY:
         blk = None
         def flush(b):
             if not b: return
-            if b['type'] == 'ex' and b.get('pv') in cited and b.get('asof'):
-                k = (max(b['asof']), b['s'], b.get('rid', ''), b.get('text'))
-                if b['pv'] not in pub_ex or k[0] > pub_ex[b['pv']][0]: pub_ex[b['pv']] = k
+            if b['type'] == 'ex':   # 根拠でない条・項・号(移った先など)の版も持つ(同じ版を書き直さないため)
+                x = ex_info.setdefault(b['s'], {'asof': []}); x['asof'] += b['asof']
+                for k in ('pv', 'rid', 'text'):
+                    if b.get(k) is not None: x[k] = b[k]
             if b['type'] == 'ch' and not b.get('new') and b.get('pv') in cited:
                 pub_rm[b['pv']] = max(pub_rm.get(b['pv'], ''), b['end'])
         for line in gzip.open(fn, 'rt', encoding='utf-8'):
@@ -167,6 +172,10 @@ def read_pub():
                 flush(blk); blk = None
                 m = re.match(r'^<' + re.escape(BASE) + r'([^>]+)> a (eli:LegalExpression|jpp:ProvisionChange) ', line)
                 if m: blk = {'type': 'ex' if m.group(2) == 'eli:LegalExpression' else 'ch', 's': m.group(1), 'asof': []}
+                m = re.match(r'^<' + re.escape(BASE) + r'law/[^/]+/revision/([^>]+)> a jpp:LawRevision', line)
+                if m: pub_revs.add(m.group(1))
+                m = re.match(r'^<' + re.escape(BASE) + r'([^>]+/version/[^>]+)> jpp:asOf "([0-9-]+)"', line)   # 版に確かめた日だけを足した行(毎週の追跡)
+                if m: ex_info.setdefault(m.group(1), {'asof': []})['asof'].append(m.group(2))
                 continue
             if blk is None: continue
             m = re.match(r'\s+(eli:realizes|jpp:provision) <' + re.escape(BASE) + r'([^>]+)>', line)
@@ -181,22 +190,31 @@ def read_pub():
             if m: blk['end'] = m.group(1); continue
             if re.match(r'\s+jpp:newVersion ', line): blk['new'] = True
         flush(blk)
+    for ex, x in ex_info.items():
+        all_pub_ex.add(ex)
+        if x.get('pv') and x['asof']:
+            k = (max(x['asof']), ex, x.get('rid', ''), x.get('text'))
+            if x['pv'] not in pub_ex or k[0] > pub_ex[x['pv']][0]: pub_ex[x['pv']] = k
+ex_info = {}
 read_pub()
 BASE_END = '2026-11-18'   # 初めに比べた期間の終わり(この日の版が、公開しているデータの初めの「今の版」)
 def pub_state(pv):
-    """('ex', asOf, 版の path, law_revision_id, 文言) / ('absent', 無くなった日) / ('none', 理由)"""
+    """('ex', asOf, 版の path, law_revision_id, 文言) / ('stale', 同じ形。初めの比べの終わりより前の版しか無い) / ('absent', 無くなった日) / ('none', 理由)"""
     e = pub_ex.get(pv); r = pub_rm.get(pv)
     if r and (not e or r >= e[0]): return ('absent', r)
     if not e: return ('none', '公開しているデータに版が無い')
-    if e[0] < BASE_END: return ('none', f'公開しているデータに {BASE_END} 以後の版が無い(初めの比べで本文が取れなかったか、取っていない)')
+    if e[0] < BASE_END: return ('stale',) + e   # 初めの比べで新しい版が取れなかった・取っていない。毎回の対象にする
     return ('ex',) + e
 by_law = collections.defaultdict(list)
 for pv, procs in cited.items(): by_law[pv.split('/')[1]].append((pv, procs))
 # ---- 4. 対象の法令
 bulk_laws = {u[0] for u in upd}
 due_laws = {r['law_id'] for r in REV.values() if start_all < (r['amendment_enforcement_date'] or '') <= end}
-targets = (bulk_laws | (set() if A.only_bulk else due_laws) | set(state['failed_laws'])) & set(by_law)
-say(f'# 期間 {start_all} 〜 {end}: 更新データの法令 {len(bulk_laws)}、施行日が来た改正のある法令 {len(due_laws)}、前回取れなかった法令 {len(state["failed_laws"])} → このデータが使う法令 {len(targets)}')
+# 公開しているデータに初めの比べの終わり(2026-11-18)以後の版が無く、無くなったの記録も無い条・項・号の法令は、更新データに出たかどうかによらず毎回の対象にする
+stale_laws = {pv.split('/')[1] for pv in cited if pub_state(pv)[0] == 'stale'}
+targets = (bulk_laws | (set() if A.only_bulk else due_laws) | set(state['failed_laws']) | stale_laws) & set(by_law)
+say(f'# 期間 {start_all} 〜 {end}: 更新データの法令 {len(bulk_laws)}、施行日が来た改正のある法令 {len(due_laws)}、前回取れなかった法令 {len(state["failed_laws"])}、'
+    f'公開しているデータに {BASE_END} 以後の版が無い法令 {len(stale_laws)} → このデータが使う法令 {len(targets)}')
 # ---- 5. 比べる
 DEP = {'article': '条', 'paragraph': '項', 'item': '号'}
 def pos_of(pv):
@@ -227,7 +245,7 @@ def correction(lid, pv, rid, a, b):
     row = {'法令ID': lid, '条・項・号': plabel.get(pv, pv), '版の ID': rid, '見つけた日': end, '違う所': diff_txt(a, b)}
     key = lambda r: (r['法令ID'], r['条・項・号'], r['版の ID'], r['違う所'])
     if key(row) not in {key(r) for r in corr}: corr.append(row); corr_new.append(row)
-recs = []; cnt = collections.Counter(); skipped = []   # skipped: 比べられなかった条・項・号と、本文が取れなかった法令(中身を last_run.json に書く)
+recs = []; vers_only = []; cnt = collections.Counter(); skipped = []   # skipped: 比べられなかった条・項・号と、本文が取れなかった法令(中身を last_run.json に書く)
 for lid in sorted(targets):
     start = A.since or min(x for x in (state['failed_laws'].get(lid), law_start.get(lid), start_all) if x)
     if start >= end: cnt['期間が無い(すでに確かめた)'] += 1; continue
@@ -246,8 +264,11 @@ for lid in sorted(targets):
         if ps[0] == 'absent':
             if nt is None: cnt['無いまま(公開しているデータで無くなったと記録した)'] += 1; continue
             cnt['比べられない'] += 1; skipped.append({'law': lid, 'provisions': [pv], 'reason': f'比べられない: 公開しているデータで無くなった({ps[1]})条・項・号が、新しい版にある'}); continue
-        _, pasof, pex, prid, ptext = ps
-        if nt is not None and norm(nt) == norm(ptext): cnt['文言が同じ'] += 1; continue
+        stale, pasof, pex, prid, ptext = ps[0] == 'stale', *ps[1:]
+        if nt is not None and norm(nt) == norm(ptext):
+            if stale: vers_only.append(dict(lid=lid, pv=pv, nrv=nrv, ni=ni, p=p, dep=dep, pex=pex, prid=prid)); cnt[f'版だけ足した({BASE_END} 以後の版が無かった。文言が同じ)'] += 1
+            else: cnt['文言が同じ'] += 1
+            continue
         if prid == nrid:   # 版の ID が同じで文言だけが違う: e-Gov が版を変えずに直した。改正の記録にしない
             correction(lid, pv, prid, ptext, nt); cnt['版を変えない直し(e-Gov)'] += 1; continue
         if prid not in olds: olds[prid] = load_rev(prid)
@@ -258,7 +279,9 @@ for lid in sorted(targets):
             correction(lid, pv, prid, ptext, ot); cnt['版を変えない直し(e-Gov。公開しているデータの版)'] += 1
             if ot is None: cnt['比べられない'] += 1; skipped.append({'law': lid, 'provisions': [pv], 'reason': '比べられない: 公開しているデータの版の要素が、e-Gov の今の同じ版に無い'}); continue
         x = change_rules.classify(oi, ni, p, dep, caches[prid])   # 区分は、公開しているデータの版と新しい版の本文で決める(直しは改正に数えない)
-        if x is None: cnt['文言が同じ(e-Gov の直しを除くと)'] += 1; continue
+        if x is None:
+            if stale: vers_only.append(dict(lid=lid, pv=pv, nrv=nrv, ni=ni, p=p, dep=dep, pex=pex, prid=prid))
+            cnt['文言が同じ(e-Gov の直しを除くと)'] += 1; continue
         if x['kind'] == '比べられない': cnt['比べられない'] += 1; skipped.append({'law': lid, 'provisions': [pv], 'reason': '比べられない: ' + x.get('rule', '')}); continue
         cnt[x['kind']] += 1
         recs.append(dict(lid=lid, pv=pv, procs=sorted(procs), start=start, end=end, old_ex=pex, nrv=nrv, ni=ni, p=p, dep=dep, **x))
@@ -296,7 +319,24 @@ for r in recs:   # 新しい文言の版の改正(見つけた改正)。改正�
     if rid and rid not in REV: REV[rid] = {'law_id': r['lid'], 'law_revision_id': rid, 'amendment_enforcement_date': rv.get('amendment_enforcement_date') or '', 'amendment_law_num': rv.get('amendment_law_num') or '',
                                            'current_revision_status': rv.get('current_revision_status') or '', 'source': f'law_data {end}'}
     if rid and rv.get('amendment_promulgate_date'): REV[rid]['amendment_promulgate_date'] = rv['amendment_promulgate_date']
-if (recs or win_revs) and not A.dry_run:
+def write_version(pv, idx, pos, dep, rv, asof, s):
+    """条・項・号の版を書く。同じ版(同じ URI)が公開しているデータにあれば、確かめた日(jpp:asOf)だけを足す(文言を書き直さない)"""
+    t = elem_text(idx, pos, dep)
+    if t is None: return None
+    rid = rv.get('law_revision_id', ''); ex = f'{pv}/version/{rid}'
+    if ex in written: return ex
+    written.add(ex)
+    if (pub_ex.get(pv) or (None, None))[1] == ex or ex in all_pub_ex: s(iri(ex), [('jpp:asOf', lit(asof, dt='date'))]); return ex
+    vd = (REV.get(rid) or {}).get('amendment_enforcement_date') or rv.get('amendment_enforcement_date')
+    s(iri(ex), [('a', 'eli:LegalExpression'), ('eli:realizes', iri(pv)), ('eli:version_date', lit(vd, dt='date') if vd else None), ('jpp:lawRevision', lit(rid)),
+                ('eli:language', '<http://publications.europa.eu/resource/authority/language/JPN>'), ('jpp:text', lit(t, 'ja')), ('jpp:asOf', lit(asof, dt='date'))])
+    s(iri(pv), [('eli:is_realized_by', iri(ex))])
+    return ex
+def mpos(m):   # 移った先(附則, 条, 項, 号)→ 位置と深さ
+    sup, art, pn, it = m
+    return {'附則': sup, '条': art, '項': pn, '号': it}, ('号' if it is not None else '項' if pn is not None else '条')
+written = set()
+if (recs or win_revs or vers_only) and not A.dry_run:
     os.makedirs(f'{A.data}/weekly', exist_ok=True)
     PER = f'{start_all}_{end}'; fn = f'{A.data}/weekly/changes_{PER}.ttl.gz'
     f = gzip.open(fn, 'wt', encoding='utf-8')
@@ -315,14 +355,12 @@ if (recs or win_revs) and not A.dry_run:
         if per not in periods:
             periods.add(per); s(iri(f'period/{per}'), [('a', 'dct:PeriodOfTime'), ('dcat:startDate', lit(r['start'], dt='date')), ('dcat:endDate', lit(r['end'], dt='date'))])
         vers = {'old': r['old_ex']}   # 旧い版は公開しているデータの版(書き直さない)
-        rid = r['nrv'].get('law_revision_id', ''); t = elem_text(r['ni'], r['p'], r['dep'])
-        if t is not None:
-            ex = f'{r["pv"]}/version/{rid}'; vers['new'] = ex
-            vd = (REV.get(rid) or {}).get('amendment_enforcement_date') or r['nrv'].get('amendment_enforcement_date')
-            s(iri(ex), [('a', 'eli:LegalExpression'), ('eli:realizes', iri(r['pv'])), ('eli:version_date', lit(vd, dt='date') if vd else None), ('jpp:lawRevision', lit(rid)),
-                        ('eli:language', '<http://publications.europa.eu/resource/authority/language/JPN>'), ('jpp:text', lit(t, 'ja')), ('jpp:asOf', lit(r['end'], dt='date'))])
-            s(iri(r['pv']), [('eli:is_realized_by', iri(ex))])
+        rid = r['nrv'].get('law_revision_id', '')
+        ex = write_version(r['pv'], r['ni'], r['p'], r['dep'], r['nrv'], r['end'], s)
+        if ex: vers['new'] = ex
         mv = node_for(r['lid'], r['moved'], newnodes) if r['moved'] else None
+        if mv:   # 移った先の条・項・号の版(文言)も書く(閲覧ページで移った先の文言を出すため)
+            mp, md_ = mpos(r['moved']); write_version(mv, r['ni'], mp, md_, r['nrv'], r['end'], s)
         cands = [node_for(r['lid'], pos, newnodes) for _, pos, _ in r['cands']]
         revs = [x['law_revision_id'] for x in REV.values() if x['law_id'] == r['lid'] and r['start'] < (x['amendment_enforcement_date'] or '') <= r['end']]
         revs_used.update(revs); found = rid if rid in REV else None
@@ -337,10 +375,13 @@ if (recs or win_revs) and not A.dry_run:
                 ('jpp:enforcedBeforePeriod', 'true' if found and fed and fed <= r['start'] else None)]
         pos += [('jpp:affects', iri(f'procedure/{p}')) for p in r['procs']]
         s(iri(f'change/{r["pv"][len("provision/"):]}/{per}'), pos)
+    for v in vers_only:   # 公開しているデータに新しい版が無かった条・項・号で、今の文言が同じもの: 版だけ足す(jpp:asOf が取った日)
+        write_version(v['pv'], v['ni'], v['p'], v['dep'], v['nrv'], end, s)
     for x in sorted(revs_used):
         rr = REV[x]
         s(iri(f'law/{rr["law_id"]}/revision/{x}'), [('a', 'jpp:LawRevision'), ('dct:identifier', lit(x)), ('jpp:revisionOf', iri(f'law/{rr["law_id"]}')),
                                                     ('jpp:enforcementDate', lit(rr['amendment_enforcement_date'], dt='date') if rr['amendment_enforcement_date'] else None), ('jpp:amendmentLawNum', lit(rr['amendment_law_num']) if rr.get('amendment_law_num') else None),
+                                                    ('jpp:foundOn', lit(end, dt='date') if x not in pub_revs else None),   # このデータが初めて知った日(毎週の追跡が足した改正だけ)
                                                     ('jpp:promulgationDate', lit(rr['amendment_promulgate_date'], dt='date') if re.fullmatch(r'\d{4}-\d{2}-\d{2}', rr.get('amendment_promulgate_date') or '') else None)])
     for path, lv, parent, l, num in newnodes:
         s(iri(path), [('a', 'eli:LegalResourceSubdivision'), ('eli:is_part_of', iri(parent)), ('eli:number', lit(num)), ('rdfs:label', lit(l, 'ja')), ('jpp:level', iri(f'code/level/{lv}')),
@@ -363,7 +404,7 @@ long_pending = [{'day': d, 'since': v['since'], 'error': v.get('error')} for d, 
 if fail: say(f'取れなかったもの(次の実行でもう一度取る): {fail}')
 if corr_new: say(f'  版を変えない直し(e-Gov)を新しく見つけた: {len(corr_new)}(改正の記録にしない。{corr_fp} に書いた)')
 if v1_mismatch: say(f'  v1 の一覧の件数と更新データの行数が合わない日: {v1_mismatch}')
-json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'counts': dict(cnt), 'failures': fail,
+json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'versions_added': len(vers_only), 'counts': dict(cnt), 'failures': fail,
            'unconfirmed_days': sorted(pending), 'unconfirmed_laws': sorted(state['failed_laws']), 'long_pending': long_pending, 'skipped': skipped,
            'days': {d: day_note[d] for d in sorted(day_note)}, 'no_update_days': sorted(no_update), 'v1_mismatch': v1_mismatch, 'corrections_new': corr_new, 'log': log},
           open(f'{A.tracking}/last_run.json', 'w'), ensure_ascii=False, indent=1)

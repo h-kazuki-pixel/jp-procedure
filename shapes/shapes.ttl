@@ -70,7 +70,8 @@ jpp:ChangeShape a sh:NodeShape ; sh:targetClass jpp:ProvisionChange ; sh:name "�
 jpp:RevisionShape a sh:NodeShape ; sh:targetClass jpp:LawRevision ; sh:name "期間内の改正" ;
   sh:property [ sh:path jpp:revisionOf ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalResource ] ;
   sh:property [ sh:path jpp:enforcementDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ; sh:name "施行期日(記録の期間の中にあるかは scripts/57_count_checks.py で確かめる)" ] ;
-  sh:property [ sh:path jpp:promulgationDate ; sh:maxCount 1 ; sh:datatype xsd:date ] .
+  sh:property [ sh:path jpp:promulgationDate ; sh:maxCount 1 ; sh:datatype xsd:date ] ;
+  sh:property [ sh:path jpp:foundOn ; sh:maxCount 1 ; sh:datatype xsd:date ; sh:name "毎週の追跡が初めて足した改正の、見つけた日" ] .
 jpp:ReviewShape a sh:NodeShape ; sh:targetClass jpp:Review ; sh:name "区分を確かめた記録" ;
   sh:property [ sh:path jpp:reviewerType ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/reviewer-type/other-ai> <https://w3id.org/jp-procedure/code/reviewer-type/human> ) ] ;
   sh:property [ sh:path jpp:reviewDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] ;
