@@ -10,13 +10,170 @@
    "ratio": 15.3
   }
  ],
+ "ministries": {
+  "start": "2025-11-01",
+  "end": "2026-11-18",
+  "rows": [
+   {
+    "ministry": "経済産業省",
+    "procedures": 8783,
+    "changed": 597,
+    "percent": 6.8
+   },
+   {
+    "ministry": "厚生労働省",
+    "procedures": 10636,
+    "changed": 583,
+    "percent": 5.48
+   },
+   {
+    "ministry": "財務省",
+    "procedures": 7022,
+    "changed": 464,
+    "percent": 6.61
+   },
+   {
+    "ministry": "総務省",
+    "procedures": 6061,
+    "changed": 297,
+    "percent": 4.9
+   },
+   {
+    "ministry": "金融庁",
+    "procedures": 6185,
+    "changed": 267,
+    "percent": 4.32
+   },
+   {
+    "ministry": "国土交通省",
+    "procedures": 13406,
+    "changed": 264,
+    "percent": 1.97
+   },
+   {
+    "ministry": "農林水産省",
+    "procedures": 8758,
+    "changed": 165,
+    "percent": 1.88
+   },
+   {
+    "ministry": "環境省",
+    "procedures": 4146,
+    "changed": 149,
+    "percent": 3.59
+   },
+   {
+    "ministry": "国家公安委員会・警察庁",
+    "procedures": 2046,
+    "changed": 62,
+    "percent": 3.03
+   },
+   {
+    "ministry": "文部科学省",
+    "procedures": 1706,
+    "changed": 47,
+    "percent": 2.75
+   },
+   {
+    "ministry": "人事院",
+    "procedures": 853,
+    "changed": 41,
+    "percent": 4.81
+   },
+   {
+    "ministry": "内閣府",
+    "procedures": 1865,
+    "changed": 41,
+    "percent": 2.2
+   },
+   {
+    "ministry": "こども家庭庁",
+    "procedures": 756,
+    "changed": 31,
+    "percent": 4.1
+   },
+   {
+    "ministry": "公正取引委員会",
+    "procedures": 332,
+    "changed": 18,
+    "percent": 5.42
+   },
+   {
+    "ministry": "法務省",
+    "procedures": 1258,
+    "changed": 17,
+    "percent": 1.35
+   },
+   {
+    "ministry": "防衛省",
+    "procedures": 492,
+    "changed": 17,
+    "percent": 3.46
+   },
+   {
+    "ministry": "外務省",
+    "procedures": 144,
+    "changed": 14,
+    "percent": 9.72
+   },
+   {
+    "ministry": "復興庁",
+    "procedures": 301,
+    "changed": 12,
+    "percent": 3.99
+   },
+   {
+    "ministry": "デジタル庁",
+    "procedures": 297,
+    "changed": 2,
+    "percent": 0.67
+   },
+   {
+    "ministry": "消費者庁",
+    "procedures": 378,
+    "changed": 2,
+    "percent": 0.53
+   },
+   {
+    "ministry": "カジノ管理委員会",
+    "procedures": 663,
+    "changed": 0,
+    "percent": 0.0
+   },
+   {
+    "ministry": "会計検査院",
+    "procedures": 53,
+    "changed": 0,
+    "percent": 0.0
+   },
+   {
+    "ministry": "個人情報保護委員会",
+    "procedures": 110,
+    "changed": 0,
+    "percent": 0.0
+   },
+   {
+    "ministry": "内閣官房",
+    "procedures": 22,
+    "changed": 0,
+    "percent": 0.0
+   },
+   {
+    "ministry": "宮内庁",
+    "procedures": 2,
+    "changed": 0,
+    "percent": 0.0
+   }
+  ]
+ },
  "queries": {
   "procedures": "queries/q5_count_procedures.rq",
   "changes": "queries/q6_changes_by_period.rq",
   "notified": "queries/q6_changes_by_period.rq",
-  "law_level": "queries/q7_law_level_by_period.rq"
+  "law_level": "queries/q7_law_level_by_period.rq",
+  "ministries": "queries/q3_changed_by_ministry.rq"
  },
- "note": "notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。scripts/75_make_stats.py が書いた",
+ "note": "notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた",
  "data_sha256": "dea967b0f75df98fba0d2a26e5403450d6a2c91720c0c0d3ce1fe0801a16f169",
  "data_files": 10
 }

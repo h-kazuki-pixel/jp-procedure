@@ -16,7 +16,7 @@ REPARSE = {n: count(f'{RDFDIR}/{n}.ttl.gz') for n in SRC}
 REPARSE['changes'] += sum(count(f) for f in WEEKLY)
 t0 = time.time()
 typ = collections.defaultdict(set); typ_ex = set(); wreal = set(); wasof = collections.defaultdict(set); per_of = {}; objs = collections.defaultdict(list); ident = []; asof = collections.Counter(); real = set(); realized_by = set()
-ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; periods = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter()
+ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; periods = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set)
 for src, files in SRC.items():
     for fn in files:
         g = rdflib.Graph(); g.parse(gzip.open(f'{D}/{fn}.ttl.gz'), format='turtle'); ntrip[src] += len(g)
@@ -31,6 +31,10 @@ for src, files in SRC.items():
             for s, o in g.subject_objects(JPP.asOf): asof[str(o)] += 1
             real.update(g.subject_objects(ELI.realizes)); realized_by.update((o, s) for s, o in g.subject_objects(ELI.is_realized_by))
             for s, o in g.subject_objects(JPP.asOf): ex_asof[s].add(str(o))
+        if src == 'procedures':
+            for s_, o in g.subject_objects(CV.hasCompetentAuthority): comp_of[s_].add(o)
+        if src == 'organisations':
+            for s_, o in g.subject_objects(rdflib.URIRef('http://www.w3.org/2004/02/skos/core#prefLabel')): org_label[s_].add(str(o))
         if src == 'procedures': cited_of.update({s: o for s, o in g.subject_objects(JPP.citedProvision)}); cit_of.update({s: o for s, o in g.subject_objects(JPP.hasCitation)})
         if src == 'procedures': cit_law.update(g.subject_objects(JPP.citedLaw)); cit_mr.update((s, str(o).rsplit('/', 1)[-1]) for s, o in g.subject_objects(JPP.matchResult))
         if src == 'changes':
@@ -159,6 +163,23 @@ if STATS and os.path.exists(STATS):
     chk(f'{STATS} の期間の集合 = 期間の節点の集合', set(got) == set(mine), True)
     for key in sorted(mine):
         chk(f'{STATS} {key[0]}〜{key[1]} の(改正の記録, 知らせる手続, 法令の単位)', got.get(key), mine[key])
+    # 府省庁ごと(閲覧ページの「府省庁ごと」。75 が q3 で出したもの)を、所管と府省庁名と改正の記録から数え直して比べる
+    if 'ministries' in st:
+        from decimal import Decimal, ROUND_HALF_UP
+        m = st['ministries']; k0 = f"{m['start']}_{m['end']}"
+        chd = {a for c, v in allchg.items() if per_of[c] == k0 for a in v['aff']}
+        byl = collections.defaultdict(set)
+        for p_, os_ in comp_of.items():
+            if p_ in ps:
+                for o in os_:
+                    for l in org_label[o]: byl[l].add(p_)
+        mm = {l: (len(v), len(v & chd), float((Decimal(len(v & chd) * 100) / Decimal(len(v))).quantize(Decimal('0.01'), ROUND_HALF_UP))) for l, v in byl.items()}
+        gm = {r['ministry']: (r['procedures'], r['changed'], r['percent']) for r in m['rows']}
+        print(f'     府省庁ごと({m["start"]}〜{m["end"]}): {len(mm)} 府省庁、手続の和 {sum(v[0] for v in mm.values()):,}、変わった手続の和 {sum(v[1] for v in mm.values()):,}')
+        chk(f'{STATS} の府省庁の集合 = 所管の府省庁名の集合', set(gm) == set(mm), True)
+        chk(f'{STATS} の府省庁ごとの(手続, 変わった手続, 割合)が、数え直したものとすべて同じ', gm == mm, True)
+        chk(f'{STATS} の府省庁ごとの変わった手続の和 = 知らせる手続の数', sum(v[1] for v in gm.values()), len(chd))
+    else: chk(f'{STATS} に府省庁ごとの数がある', False, True)
 else: print(f'     (環境変数 STATS の stats.json が無いので、問いで出した数との比べは飛ばした)')
 # README の数(<!-- n:キー -->数<!-- /n -->。83_write_readme_numbers.py が店への問いで書いたもの)と、ここで数えた数を比べる
 RD = os.environ.get('README')
