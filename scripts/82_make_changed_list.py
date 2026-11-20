@@ -8,6 +8,9 @@
   - 移った(入れ替わった→移った・無くなった→移った): 「第○条… → 第○条…」(同じ番号 → 移った先)
   - 移った先が一つに決まらない: 「第○条… → 候補 n 件」
   - 無くなった→移った先が見つからない・判定できない: 「同じ番号の要素が無い」
+- 毎週の追跡の記録には、見つけた改正(jpp:foundRevision の法令番号・公布日・施行期日)・見つけた日(jpp:foundOn)・
+  施行期日が比べた期間の始め以前か(jpp:enforcedBeforePeriod)を found に入れる(初めの期間の記録には無い)。
+- 期間ごとの名前(periods。初めの期間・週)を置く(閲覧ページの一覧で期間を選ぶため)。
 - 並びは、区分の順(文言が変わった: それ以外、大きく書き換わった、文言が変わった: 番号の参照だけ、入れ替わった…、無くなった…)、法令名、条項号、手続ID。
 - 何度流しても、同じデータなら同じ中身になる(日時は入れない)。"""
 import sys, json, difflib, pyoxigraph as ox
@@ -36,6 +39,9 @@ def snip(c):
     _, i1, i2, j1, j2 = ops[0]
     return {'type': 'diff', 'before': a[max(0, i1 - CTX):i1], 'old': cut(a[i1:i2]), 'new': cut(b[j1:j2]), 'after': a[i2:i2 + CTX], 'more': len(ops) - 1}
 SN = {ch: snip(c) for ch, c in chs.items()}
+FOUND = {r['ch']: {'num': r['num'], 'prom': r['prom'], 'enf': r['enf'], 'on': r['on'], 'late': r['late'] == 'true'} for r in q('''SELECT ?ch ?num ?prom ?enf ?on ?late WHERE {
+  ?ch a jpp:ProvisionChange ; jpp:foundRevision ?r . ?r jpp:enforcementDate ?enf .
+  OPTIONAL { ?r jpp:amendmentLawNum ?num } OPTIONAL { ?r jpp:promulgationDate ?prom } OPTIONAL { ?ch jpp:foundOn ?on } OPTIONAL { ?ch jpp:enforcedBeforePeriod ?late } }''')}
 rows = q('''SELECT ?ch ?ps ?id ?title ?org ?lawLabel WHERE {
   ?ch a jpp:ProvisionChange ; jpp:affects ?ps . ?ps dct:identifier ?id ; dct:title ?title .
   OPTIONAL { ?ps cv:hasCompetentAuthority/skos:prefLabel ?org } OPTIONAL { ?ps jpp:hasCitation/jpp:citedLaw/rdfs:label ?lawLabel } }''')
@@ -43,12 +49,15 @@ out = []
 for r in rows:
     c = chs[r['ch']]; k = c['kind'].rsplit('/', 1)[-1]
     out.append({'id': r['id'], 'ps': r['ps'], 'title': r['title'], 'org': r['org'], 'law': r['lawLabel'], 'prov': c['prov'], 'provLabel': c['provLabel'],
-                'kind': k, 'kindLabel': c['kindLabel'], 'start': c['start'], 'end': c['end'], 'snip': SN[r['ch']]})
+                'kind': k, 'kindLabel': c['kindLabel'], 'start': c['start'], 'end': c['end'], 'snip': SN[r['ch']], **({'found': FOUND[r['ch']]} if r['ch'] in FOUND else {})})
 out.sort(key=lambda x: (ORDER.index(x['kind']), x['law'], x['provLabel'], x['id']))
 S = {'note': '根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の一覧(閲覧ページの #/changed)。scripts/82_make_changed_list.py が店から作った。抜き出しの作り方はスクリプトの先頭に書いた',
-     'kinds': ORDER, 'rows': out}
+     'kinds': ORDER,
+     'periods': [{'start': s_, 'end': e_, 'label': ('初めの期間' if (s_, e_) == ('2025-11-01', '2026-11-18') else '週') + f'({s_}〜{e_})'} for s_, e_ in sorted({(x['start'], x['end']) for x in out})],
+     'rows': out}
 with open(OUT, 'w', encoding='utf-8') as f: json.dump(S, f, ensure_ascii=False, separators=(',', ':')); f.write('\n')
 import collections
 print(f'行 {len(out):,} / 改正の記録 {len(chs):,} / 抜き出しの種類 {dict(collections.Counter(s["type"] for s in SN.values()))}')
 print('期間ごと:', dict(collections.Counter((x['start'], x['end']) for x in out)))
+print('見つけた改正のある行:', sum('found' in x for x in out), '/ 施行期日が期間の始め以前の行:', sum(x.get('found', {}).get('late', False) for x in out))
 for x in [x for x in out if x['id'] in ('119637', '3549', '112875', '222279', '50387')]: print(' ', x['id'], x['kindLabel'], x['snip'])

@@ -80,6 +80,9 @@ form.search .row > * { max-width: 100%; }
 .fld select, .fld input { flex: 1 1 auto; min-width: 0; width: 100%; }
 .snip2 { font-size: .88rem; word-break: break-all; min-width: 12em; }
 .pager { display: flex; gap: 12px; align-items: center; }
+.small { font-size: .85rem; }
+.found { margin: 4px 0; }
+.late { display: inline-block; font-size: .8rem; font-weight: bold; color: var(--del-fg); background: var(--del-bg); border-radius: 4px; padding: 0 6px; margin-right: 4px; }
 footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85rem; color: var(--muted); }
 @media (max-width: 760px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -103,6 +106,7 @@ footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85
 </div></header>
 <main class="wrap" id="app"><p class="loading">読み込んでいます…</p></main>
 <footer><div class="wrap">
+  e-Gov が版を変えずに本文を直したもの(改正の記録にしていないもの)の一覧: <a id="ft-corr" rel="noopener">data/tracking/egov_corrections.csv</a>。<br>
   読むだけのページです。利用者の記録や解析のタグは入れていません。データは CC BY 4.0、出典はデジタル庁「行政手続等の棚卸調査結果」と e-Gov 法令検索(加工して作成)。国・デジタル庁が作ったものではありません。
   <span id="ft-endpoint"></span>
 </div></footer>
@@ -147,6 +151,7 @@ PREFIX jpp: <${B}def#>
 const $app = document.getElementById('app');
 let changedCache = null;   // changed.json(はじめの画面の例と、変わった手続の一覧で使う)
 document.getElementById('ft-endpoint').textContent = ' SPARQL の行き先: ' + CONFIG.endpoint;
+document.getElementById('ft-corr').href = CONFIG.repo + '/blob/main/data/tracking/egov_corrections.csv';
 
 // ---- 小さな道具 ----
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -156,6 +161,16 @@ const iri = u => '<' + String(u).replace(/[<>"{}|^`\\\s]/g, '') + '>';
 const D = d => `"${d}"^^xsd:date`;
 const PS = `?per dcat:startDate ${D(CONFIG.period.start)} ; dcat:endDate ${D(CONFIG.period.end)} .`;
 let seq = 0;   // 画面を移ったあとに古い答えで描かないため
+const ymd = d => { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[1]} 年 ${+m[2]} 月 ${+m[3]} 日` : esc(d); };
+const md = d => { const m = String(d || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? `${+m[1]} 月 ${+m[2]} 日` : esc(d); };
+// 毎週の追跡が見つけた改正(jpp:foundRevision)。f = {num, prom, enf, on, late}
+function foundHtml(f, full) {
+  if (!f) return '';
+  const rev = `${f.num ? esc(f.num) : '(法令番号なし)'}` + (full ? `(${f.prom ? '公布 ' + esc(f.prom) + '・' : ''}施行 ${esc(f.enf)})` : '');
+  const late = f.late ? `<span class="late">遅れて載った改正</span> 施行は ${ymd(f.enf)}(比べた期間より前)。e-Gov に載ったのを見つけたのは ${md(f.on)}。` : '';
+  return full ? `<p class="found">見つけた改正(新しい文言の版の改正): ${rev}${f.on && !f.late ? `。見つけた日 ${esc(f.on)}` : ''}</p>${late ? `<div class="note">${late}</div>` : ''}`
+              : `${rev}${late ? `<br>${late}` : ''}`;
+}
 
 async function sparql(q) {
   const body = new URLSearchParams({ query: P + q });
@@ -313,8 +328,9 @@ function snipHtml(s) {
 }
 async function pageChanged(params, my) {
   show(`<h1>変わった手続の一覧</h1>
-    <p class="muted">比べた期間(${esc(CONFIG.period.start)}〜${esc(CONFIG.period.end)})に、根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)。区分と抜き出しは機械の判定です(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。</p>
+    <p class="muted"><span id="cpd">比べた期間</span>に、根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)。区分と抜き出しは機械の判定です(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。週の記録には、見つけた改正(新しい文言の版の改正)を区分の下に出します。</p>
     <form class="search" id="cf"><div class="row">
+      <span class="fld"><label for="cp">期間</label><select id="cp"></select></span>
       <span class="fld"><label for="ck">区分</label><select id="ck"><option value="">すべて</option></select></span>
       <span class="fld"><label for="cm">府省庁</label><select id="cm"><option value="">すべて</option></select></span>
       <span class="fld"><label for="cq">手続名</label><input type="text" id="cq" placeholder="手続名の一部"></span>
@@ -325,7 +341,14 @@ async function pageChanged(params, my) {
     if (my !== seq) return;
   } catch (e) { if (my === seq) document.getElementById('cl').innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
   const ORDER = changedCache.kinds || [];
-  const rows = changedCache.rows.filter(r => r.start === CONFIG.period.start && r.end === CONFIG.period.end), f = document.getElementById('cf');
+  const f = document.getElementById('cf'), pk = r => r.start + '_' + r.end, baseKey = CONFIG.period.start + '_' + CONFIG.period.end;
+  const pers = changedCache.periods || [...new Map(changedCache.rows.map(r => [pk(r), { start: r.start, end: r.end, label: `${r.start}〜${r.end}` }])).values()];
+  const pn = new Map(); for (const r of changedCache.rows) pn.set(pk(r), (pn.get(pk(r)) || 0) + 1);
+  f.cp.innerHTML = pers.map(x => `<option value="${esc(pk(x))}">${esc(x.label)}(${fmt(pn.get(pk(x)) || 0)})</option>`).join('') + `<option value="all">すべての期間(${fmt(changedCache.rows.length)})</option>`;
+  f.cp.value = params.get('period') || baseKey; if (!f.cp.value) f.cp.value = baseKey;
+  const per = pers.find(x => pk(x) === f.cp.value);
+  document.getElementById('cpd').textContent = !per ? 'すべての期間' : pk(per) === baseKey ? `初めに比べた期間(${per.start}〜${per.end})` : `週(${per.start}〜${per.end})`;
+  const rows = changedCache.rows.filter(r => f.cp.value === 'all' || pk(r) === f.cp.value);
   const n = new Map(), lab = new Map(), on = new Map();
   for (const r of rows) { n.set(r.kind, (n.get(r.kind) || 0) + 1); lab.set(r.kind, r.kindLabel); on.set(r.org, (on.get(r.org) || 0) + 1); }
   f.ck.innerHTML += ORDER.filter(k => n.has(k)).map(k => `<option value="${esc(k)}">${esc(lab.get(k))}(${fmt(n.get(k))})</option>`).join('');
@@ -334,10 +357,10 @@ async function pageChanged(params, my) {
   const page = Number(params.get('page') || 1), PER = 100;
   const sel = rows.filter(r => (!f.ck.value || r.kind === f.ck.value) && (!f.cm.value || r.org === f.cm.value) && (!f.cq.value || r.title.includes(f.cq.value)));
   const pages = Math.max(1, Math.ceil(sel.length / PER)), cur = Math.min(Math.max(1, page), pages);
-  const link2 = k => { const ps = new URLSearchParams(); if (f.ck.value) ps.set('kind', f.ck.value); if (f.cm.value) ps.set('org', f.cm.value); if (f.cq.value) ps.set('q', f.cq.value); if (k > 1) ps.set('page', k); return '#/changed' + (ps.toString() ? '?' + ps : ''); };
+  const link2 = k => { const ps = new URLSearchParams(); if (f.cp.value !== baseKey) ps.set('period', f.cp.value); if (f.ck.value) ps.set('kind', f.ck.value); if (f.cm.value) ps.set('org', f.cm.value); if (f.cq.value) ps.set('q', f.cq.value); if (k > 1) ps.set('page', k); return '#/changed' + (ps.toString() ? '?' + ps : ''); };
   const nav = pages > 1 ? `<p class="pager">${cur > 1 ? `<a href="${link2(cur - 1)}">前の ${PER} 件</a>` : ''} <span class="muted">${cur} / ${pages} ページ</span> ${cur < pages ? `<a href="${link2(cur + 1)}">次の ${PER} 件</a>` : ''}</p>` : '';
   document.getElementById('cl').innerHTML = `<p class="muted">${fmt(sel.length)} 件(全 ${fmt(rows.length)} 件)</p>${nav}<div class="scroll"><table class="stack"><thead><tr><th>手続ID</th><th>手続名</th><th>根拠</th><th>区分</th><th>違う所</th><th>所管</th></tr></thead><tbody>` +
-    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span></td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
+    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span>${f.cp.value === 'all' ? `<div class="muted small">${esc(r.start)}〜${esc(r.end)}</div>` : ''}${r.found ? `<div class="small found">${foundHtml(r.found, false)}</div>` : ''}</td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
   f.addEventListener('change', () => { location.hash = link2(1); });
   f.addEventListener('submit', ev => { ev.preventDefault(); location.hash = link2(1); });
 }
@@ -428,10 +451,12 @@ async function changeBlocks(where, my, opts = {}) {
     OPTIONAL { ?ch jpp:oldVersion ?old . ?old jpp:text ?oldText . }
     OPTIONAL { ?ch jpp:newVersion ?new . ?new jpp:text ?newText . }
     OPTIONAL { ?ch jpp:movedTo ?moved . ?moved rdfs:label ?movedLabel }
-  } ORDER BY ?start ?provLabel`), sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote ?movedText WHERE {
+  } ORDER BY ?start ?provLabel`), sparql(`SELECT ?ch ?cand ?candLabel ?rev ?revDate ?revNum ?rv ?rvWho ?rvDate ?rvRes ?rvReason ?rvNote ?movedText ?frev ?fEnf ?fNum ?fProm ?fOn ?fLate WHERE {
     ${where}
     { ?ch jpp:candidate ?cand . ?cand rdfs:label ?candLabel } UNION
     { ?ch jpp:lawRevisionInPeriod ?rev . ?rev jpp:enforcementDate ?revDate . OPTIONAL { ?rev jpp:amendmentLawNum ?revNum } } UNION
+    { ?ch jpp:foundRevision ?frev . ?frev jpp:enforcementDate ?fEnf . OPTIONAL { ?frev jpp:amendmentLawNum ?fNum } OPTIONAL { ?frev jpp:promulgationDate ?fProm }
+      OPTIONAL { ?ch jpp:foundOn ?fOn } OPTIONAL { ?ch jpp:enforcedBeforePeriod ?fLate } } UNION
     { ?ch jpp:review ?rv . ?rv jpp:reviewerType/skos:prefLabel ?rvWho ; jpp:reviewDate ?rvDate ; jpp:reviewResult/skos:prefLabel ?rvRes . OPTIONAL { ?rv jpp:reviewReason ?rvReason } OPTIONAL { ?rv jpp:reviewNote ?rvNote } } UNION
     { ?ch jpp:movedTo ?moved ; dct:temporal/dcat:endDate ?end . ?moved eli:is_realized_by ?mv . ?mv jpp:asOf ?end ; jpp:text ?movedText } } ORDER BY ?revDate ?rvDate`)]);
   if (my !== seq || !rows.length) return rows.length ? '' : null;
@@ -440,7 +465,9 @@ async function changeBlocks(where, my, opts = {}) {
   for (const x of extra) if (x.movedText && seen.has(x.ch)) seen.get(x.ch).movedText = x.movedText;
   if (my !== seq) return '';
   const cands = {}, revs = {}, rvs = {};
-  for (const x of extra) { if (x.cand) (cands[x.ch] ||= []).push(x); if (x.rev) (revs[x.ch] ||= []).push(x); if (x.rv) (rvs[x.ch] ||= []).push(x); }
+  const found = {};
+  for (const x of extra) { if (x.cand) (cands[x.ch] ||= []).push(x); if (x.rev) (revs[x.ch] ||= []).push(x); if (x.rv) (rvs[x.ch] ||= []).push(x);
+    if (x.frev) found[x.ch] = { num: x.fNum, prom: x.fProm, enf: x.fEnf, on: x.fOn, late: x.fLate === 'true' }; }
   return chs.map(r => {
     const moved = !!r.moved, oldT = r.oldText || '', newT = moved ? (r.movedText || '') : (r.newText || '');
     let L = esc(oldT), R = esc(newT);
@@ -450,6 +477,7 @@ async function changeBlocks(where, my, opts = {}) {
     const cl = cands[r.ch] || [], rv = revs[r.ch] || [];
     return `<div class="change">
       <div><span class="tag">${esc(r.kindLabel)}</span> ${opts.showProv ? link(r.prov, r.provLabel) + ' ' : ''}<span class="muted">比べた期間 ${esc(r.start)}〜${esc(r.end)}</span></div>
+      ${foundHtml(found[r.ch], true)}
       ${(rvs[r.ch] || []).map(v => `<div class="note">${esc(v.rvWho)}が読んで確かめた(${esc(v.rvDate)}): ${esc(v.rvRes)}${v.rvReason ? '。理由: ' + esc(v.rvReason) : ''}${v.rvNote ? '。メモ: ' + esc(v.rvNote) : ''}</div>`).join('')}
       ${cl.length ? `<p>移った先の候補(一つに決まらない): ${cl.map(c => link(c.cand, c.candLabel)).join('、')}</p>` : ''}
       <div class="cols">
