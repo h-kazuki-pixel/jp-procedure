@@ -44,3 +44,7 @@
 ## 毎週の追跡
 
 `70_weekly_track.py` は、公開用のリポジトリの形(`data/rdf/`、`data/tracking/`)の上で動きます。使い方はスクリプトの先頭にあります。GitHub Actions のワークフローは `../.github/workflows/weekly-track.yml` です。
+
+- 取れなかった日・法令は `data/tracking/state.json` の `pending_days`・`failed_laws` に残し、次の実行で取り直します(取れなかった実行の比べ始めから比べる)。取れた分の記録は書き、確かめた日は進めます。
+- 取れなかったもの・比べられなかった条項号の中身は `data/tracking/last_run.json`(`skipped`・`long_pending`)にあります。
+- 試し: 作業フォルダの `88_test_weekly_failures.py` が、偽の e-Gov(500 の日、404 の法令)で上のとおりに動くことを確かめます(公開用には入れていない)。

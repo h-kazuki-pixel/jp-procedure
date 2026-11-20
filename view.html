@@ -258,7 +258,11 @@ async function pageHome(my) {
     if (my !== seq) return;
     const w = (st.weeks || []).slice(-1)[0];
     document.getElementById('status').innerHTML = `最後に確かめた日: <strong>${esc(st.last_checked)}</strong>` +
-      (w ? `(直近の週 ${esc(w.period[0])}〜${esc(w.period[1])} に足した改正の記録: ${fmt(w.records)} 件)` : '(毎週の追跡はまだ動いていません)') + ' <span class="muted">— status.json</span>';
+      (w ? `(直近の週 ${esc(w.period[0])}〜${esc(w.period[1])} に足した改正の記録: ${fmt(w.records)} 件)` : '(毎週の追跡はまだ動いていません)') +
+      // 確かめられなかった日・法令(e-Gov から取れなかったもの)。0 のときは出さない
+      ((u => { const d = (u && u.days || []).length, l = (u && u.laws || []).length;
+        return d || l ? `。<span title="${esc(u.note || '')}">確かめられなかった${[d ? '日 ' + fmt(d) : '', l ? '法令 ' + fmt(l) : ''].filter(Boolean).join('・')}(次の実行でもう一度取ります)</span>` : ''; })(st.unconfirmed)) +
+      ' <span class="muted">— status.json</span>';
   }).catch(() => { if (my === seq) document.getElementById('status').textContent = '最後に確かめた日: status.json を読めませんでした'; });
   homeExample(my);
   // 数は、データを作るときに queries/ の問いで出して stats.json に置いたもの(開くたびに時間のかかる問いを回さない)

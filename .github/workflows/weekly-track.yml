@@ -10,6 +10,8 @@
 # 3. 記録を足して main に入れたら、作り直したデータで Cloud Run の SPARQL を入れ替える(vars.DEPLOY_ENABLED が 'true' のときだけ)。
 #    手で「Run workflow」を選び deploy_only に印を付けると、追跡はせず、入れ替えだけを試せる(deploy.md の手順 9)。
 # 4. 2 回続けて失敗したら Issue を立てる。
+# 5. e-Gov から取れなかった日(更新データ)と法令(本文)は、失敗にせず state.json に残し、次の実行でもう一度取る(取れた分は 2 のとおり main に入れる)。
+#    取れないままが 4 週(28 日)続いたものは Issue を立てる(同じラベルの開いた Issue があれば立てない)。
 # 毎週の予定に戻すときは、on: に次の 2 行を足す(毎週月曜 06:00 日本時間):
 #   schedule:
 #     - cron: '0 21 * * 0'
@@ -39,6 +41,7 @@ jobs:
       revisions: ${{ steps.track.outputs.revisions }}
       end: ${{ steps.track.outputs.end }}
       pushed: ${{ steps.push.outputs.pushed }}
+      long_pending: ${{ steps.track.outputs.long_pending }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,7 +61,7 @@ jobs:
           python3 scripts/70_weekly_track.py --days 7
           python3 - <<'EOF' >> "$GITHUB_OUTPUT"
           import json; r = json.load(open('data/tracking/last_run.json'))
-          print(f"records={r['records']}"); print(f"revisions={r.get('revisions', 0)}"); print(f"end={r['period'][1]}")
+          print(f"records={r['records']}"); print(f"revisions={r.get('revisions', 0)}"); print(f"end={r['period'][1]}"); print(f"long_pending={len(r.get('long_pending') or [])}")
           EOF
       - name: 確かめ(自作 SHACL・公式 CPSV-AP SHACL・全体の数)と、はじめの画面の数(stats.json)
         id: checks
@@ -102,6 +105,19 @@ jobs:
           git commit -m "毎週の追跡: ${{ steps.track.outputs.end }} まで確かめた(改正の記録 ${{ steps.track.outputs.records }} 件)"
           git push
           echo "pushed=true" >> "$GITHUB_OUTPUT"
+      - name: 4 週続けて取れなかった日・法令があれば Issue を立てる
+        if: steps.track.outputs.long_pending != '0' && steps.track.outputs.long_pending != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create weekly-unconfirmed -R "$GITHUB_REPOSITORY" --color FBCA04 --force
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label weekly-unconfirmed --state open --json number --jq length)
+          if [ "$open" != "0" ]; then echo "すでに開いた Issue がある"; exit 0; fi
+          body=$(python3 -c "import json; r = json.load(open('data/tracking/last_run.json')); print('\n'.join('- ' + (('更新データ ' + x['day']) if 'day' in x else ('法令 ' + x['law'])) + '(' + x['since'] + ' から取れない' + ((' / ' + x['error']) if x.get('error') else '') + ')' for x in r['long_pending']))")
+          gh issue create -R "$GITHUB_REPOSITORY" --label weekly-unconfirmed \
+            --title "毎週の追跡: e-Gov から 4 週続けて取れない日・法令がある(${{ steps.track.outputs.end }})" \
+            --body "$body
+          実行: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: その週の差分を Release に出す
         if: steps.push.outputs.pushed == 'true' && steps.track.outputs.records != '0'
         env:

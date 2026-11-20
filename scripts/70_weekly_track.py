@@ -6,7 +6,15 @@
   python3 scripts/70_weekly_track.py                       # 今日(日本時間)まで、過去 7 日の更新データ
   python3 scripts/70_weekly_track.py --today 2026-11-18 --days 1 --offline
   python3 scripts/70_weekly_track.py --since 2025-11-01 --only-bulk --offline --dry-run   # 作り直しの確かめ
-終わりの状態: 正常なら 0、取得に失敗した日・法令があれば 1(GitHub Actions はこれで失敗を知る)。"""
+取れなかったもの:
+  - 更新データを取れなかった日(状態が 200 でない・zip でない)は「確かめられなかった日」として state.json の pending_days に残し、次の実行でもう一度取る。
+    「更新なし」とはみなさない(2026-11-20 に確かめた: 一括ダウンロードのページ・法令API v2 の説明・法令データ ドキュメンテーションに、
+    更新の無い日の返し方は書かれていない。土日・祝日などファイルの無い日は HTTP 500 が返る)。
+  - 本文を取れなかった法令は failed_laws に残し、次の実行で、そのときの比べ始めからもう一度比べる。
+  - 取れなかった日を後で取れたときは、その日の更新に出た法令を、取れなかった実行の比べ始めから比べる。
+  - 取れなかったものがあっても、取れた分の記録は書き、確かめた日(checked_through)を進める。
+  - 初めて取れなかった実行から 28 日以上続いているものは last_run.json の long_pending に出す(ワークフローが Issue にする)。
+終わりの状態: 0(取れなかったものがあっても 0。数は last_run.json に書く)。"""
 import sys, os, re, io, csv, gzip, json, time, zipfile, argparse, datetime, collections, urllib.request, urllib.error
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import egov
@@ -26,23 +34,34 @@ state = json.load(open(state_fp)) if os.path.exists(state_fp) else {'checked_thr
 fail = []; log = []
 def say(s): print(s, flush=True); log.append(s)
 # ---- 1. 一括ダウンロードの更新データ(過去 N 日)
-BULK = 'https://laws.e-gov.go.jp/bulkdownload?file_section=3&update_date={d}&only_xml_flag=true'
+BULK = os.environ.get('EGOV_BULK_URL', 'https://laws.e-gov.go.jp/bulkdownload?file_section=3&update_date={d}&only_xml_flag=true')   # 試すときだけ変える
 given = dict(x.split('=', 1) for x in A.bulk_file)
 upd = []   # (法令ID, law_revision_id, 施行日 YYYY-MM-DD, 未施行, 改正法令番号, 更新日)
 _last = [0.0]
-for k in range(1, A.days + 1):
-    d = (today - datetime.timedelta(days=k)).strftime('%Y%m%d'); fp = given.get(d, f'{A.tracking}/bulk/{d}.zip')
+start_all = A.since or state['checked_through']; end = today.isoformat()
+pending = state.setdefault('pending_days', {})     # 'YYYYMMDD': {'since': 初めて取れなかった実行の日, 'start': その実行の比べ始め, 'error': 最後の理由}
+failed_since = state.setdefault('failed_since', {})   # 法令ID: 初めて取れなかった実行の日
+day_start = {}   # 前に取れなかった日を今回取れたとき: その日 → 比べ始め
+def unconfirmed(d, why):
+    p = pending.setdefault(d, {'since': end, 'start': start_all}); p['error'] = why; fail.append(('bulk', d))
+    say(f'  更新データ {d}: 確かめられなかった({why})。次の実行でもう一度取る')
+days = sorted({(today - datetime.timedelta(days=k)).strftime('%Y%m%d') for k in range(1, A.days + 1)} | set(pending), reverse=True)
+for d in days:
+    fp = given.get(d, f'{A.tracking}/bulk/{d}.zip')
     if not os.path.exists(fp):
         if A.offline: say(f'  更新データ {d}: 手元に無い(取らない)'); continue
         wait = 1.05 - (time.time() - _last[0]); time.sleep(max(0, wait))
         try:
             with urllib.request.urlopen(urllib.request.Request(BULK.format(d=d), headers={'User-Agent': 'jp-procedure-tracker'}), timeout=180) as r: raw = r.read()
-        except urllib.error.URLError as e: say(f'  更新データ {d}: 取れなかった({e})'); fail.append(('bulk', d)); continue
+        except urllib.error.HTTPError as e: unconfirmed(d, f'HTTP {e.code}'); continue
+        except (urllib.error.URLError, OSError) as e: unconfirmed(d, f'通信エラー {type(e).__name__}'); continue
         finally: _last[0] = time.time()
+        if not zipfile.is_zipfile(io.BytesIO(raw)): unconfirmed(d, f'zip でない({len(raw)} バイト)'); continue
         open(fp, 'wb').write(raw)
     raw = open(fp, 'rb').read()
     try: z = zipfile.ZipFile(io.BytesIO(raw))
-    except zipfile.BadZipFile: say(f'  更新データ {d}: zip でない({len(raw)} バイト)。更新の無い日とみなす'); continue
+    except zipfile.BadZipFile: unconfirmed(d, f'手元のファイルが zip でない({len(raw)} バイト)'); continue
+    if d in pending: day_start[d] = pending.pop(d)['start']; say(f'  更新データ {d}: 前に確かめられなかった日を、今回取れた(比べ始め {day_start[d]})')
     cn = [n for n in z.namelist() if n.lower().endswith('.csv')]
     rows = list(csv.DictReader(io.StringIO(z.read(cn[0]).decode('utf-8-sig')))) if cn else []
     for r in rows:
@@ -50,6 +69,9 @@ for k in range(1, A.days + 1):
         ed = f'{m.group(1)[:4]}-{m.group(1)[4:6]}-{m.group(1)[6:]}' if m else ''
         upd.append((r['法令ID'], f'{r["法令ID"]}_{tail}', ed, r['未施行'].strip() != '', r['改正法令番号'], d))
     say(f'  更新データ {d}: {len(rows)} 行')
+law_start = {}   # 前に取れなかった日に出た法令 → 比べ始め
+for lid, rid, ed, un, num, d in upd:
+    if d in day_start: law_start[lid] = min(law_start.get(lid, day_start[d]), day_start[d])
 # ---- 2. 改正履歴(手元の分に、更新データの行を足す)
 rv_fp = f'{A.tracking}/law_revisions.csv.gz'
 REV = {}
@@ -76,37 +98,37 @@ for fn in ['provisions', 'changes']:
 by_law = collections.defaultdict(list)
 for pv, procs in cited.items(): by_law[pv.split('/')[1]].append((pv, procs))
 # ---- 4. 対象の法令
-start_all = A.since or state['checked_through']; end = today.isoformat()
 bulk_laws = {u[0] for u in upd}
 due_laws = {r['law_id'] for r in REV.values() if start_all < (r['amendment_enforcement_date'] or '') <= end}
 targets = (bulk_laws | (set() if A.only_bulk else due_laws) | set(state['failed_laws'])) & set(by_law)
-say(f'# 期間 {start_all} 〜 {end}: 更新データの法令 {len(bulk_laws)}、施行日が来た改正のある法令 {len(due_laws)}、前回失敗した法令 {len(state["failed_laws"])} → このデータが使う法令 {len(targets)}')
+say(f'# 期間 {start_all} 〜 {end}: 更新データの法令 {len(bulk_laws)}、施行日が来た改正のある法令 {len(due_laws)}、前回取れなかった法令 {len(state["failed_laws"])} → このデータが使う法令 {len(targets)}')
 # ---- 5. 比べる
 DEP = {'article': '条', 'paragraph': '項', 'item': '号'}
 def pos_of(pv):
     s = pv.split('/')[2:]; sup = s[0].startswith('suppl-')
     return {'附則': sup, '条': s[0].replace('suppl-', ''), '項': s[1] if len(s) > 1 else None, '号': s[2] if len(s) > 2 else None}
 def load(lid, asof):
-    b = egov.get(f'/law_data/{lid}', {'asof': asof, 'response_format': 'json', 'json_format': 'full'}, offline=A.offline)
+    b = egov.get(f'/law_data/{lid}', {'asof': asof, 'response_format': 'json', 'json_format': 'full'}, offline=A.offline, refresh_404=True)
     if b.get('_status') != 200: return None, None, b.get('_status')
     lb = [c for c in b['law_full_text']['children'] if isinstance(c, dict) and c['tag'] == 'LawBody'][0]
     return article_index(lb), b.get('revision_info', {}), 200
-recs = []; cnt = collections.Counter()
+recs = []; cnt = collections.Counter(); skipped = []   # skipped: 比べられなかった条・項・号と、本文が取れなかった法令(中身を last_run.json に書く)
 for lid in sorted(targets):
-    start = state['failed_laws'].get(lid, start_all) if not A.since else A.since
+    start = A.since or min(x for x in (state['failed_laws'].get(lid), law_start.get(lid), start_all) if x)
     if start >= end: cnt['期間が無い(すでに確かめた)'] += 1; continue
     oi, orv, ost = load(lid, start); ni, nrv, nst = load(lid, end)
     if oi is None or ni is None:
         cnt[f'本文が取れない(旧 {ost} / 新 {nst})'] += 1
-        if not (A.offline and '未取得' in (str(ost), str(nst))): fail.append(('law', lid))
+        skipped.append({'law': lid, 'provisions': sorted(pv for pv, _ in by_law[lid]), 'reason': f'本文が取れない(旧 {start}: {ost} / 新 {end}: {nst})'})
+        if not (A.offline and '未取得' in (str(ost), str(nst))): fail.append(('law', lid)); failed_since.setdefault(lid, end)
         state['failed_laws'][lid] = start; continue
-    state['failed_laws'].pop(lid, None); cache = {}
+    state['failed_laws'].pop(lid, None); failed_since.pop(lid, None); cache = {}
     for pv, procs in by_law[lid]:
         dep = DEP.get(level.get(pv)); p = pos_of(pv)
         if dep is None: cnt['深さが分からない'] += 1; continue
         x = change_rules.classify(oi, ni, p, dep, cache)
         if x is None: cnt['文言が同じ'] += 1; continue
-        if x['kind'] == '比べられない': cnt['比べられない'] += 1; continue
+        if x['kind'] == '比べられない': cnt['比べられない'] += 1; skipped.append({'law': lid, 'provisions': [pv], 'reason': '比べられない: ' + x.get('rule', '')}); continue
         cnt[x['kind']] += 1
         recs.append(dict(lid=lid, pv=pv, procs=sorted(procs), start=start, end=end, orv=orv, nrv=nrv, oi=oi, ni=ni, p=p, dep=dep, **x))
 say(f'  比べた結果(条・項・号): {dict(cnt)}')
@@ -184,12 +206,16 @@ if (recs or win_revs) and not A.dry_run:
                       ('rdfs:comment', lit(f'改正の記録の移った先・候補として足した条・項・号({end} 版の番号)', 'ja'))])
     f.close(); say(f'  書いたファイル: {fn}')
 if not A.dry_run:
-    if not fail: state['checked_through'] = end
+    state['checked_through'] = end   # 取れなかった日・法令は pending_days・failed_laws に残してあり、次の実行で取り直す
     json.dump(state, open(state_fp, 'w'), ensure_ascii=False, indent=1)
     # 中身が同じなら同じバイトになるように、gzip の頭の日時を 0 にし、ファイル名を入れない
     with open(rv_fp, 'wb') as raw, io.TextIOWrapper(gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0), encoding='utf-8', newline='') as g:
         w = csv.DictWriter(g, fieldnames=['law_id', 'law_revision_id', 'amendment_enforcement_date', 'amendment_law_num', 'current_revision_status', 'source'], extrasaction='ignore')
         w.writeheader(); [w.writerow(r) for r in REV.values()]
-json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'counts': dict(cnt), 'failures': fail, 'log': log},
+lim = (today - datetime.timedelta(days=28)).isoformat()
+long_pending = [{'day': d, 'since': v['since'], 'error': v.get('error')} for d, v in sorted(pending.items()) if v['since'] <= lim] + \
+               [{'law': l, 'since': s_} for l, s_ in sorted(failed_since.items()) if s_ <= lim and l in state['failed_laws']]
+if fail: say(f'取れなかったもの(次の実行でもう一度取る): {fail}')
+json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'counts': dict(cnt), 'failures': fail,
+           'unconfirmed_days': sorted(pending), 'unconfirmed_laws': sorted(state['failed_laws']), 'long_pending': long_pending, 'skipped': skipped, 'log': log},
           open(f'{A.tracking}/last_run.json', 'w'), ensure_ascii=False, indent=1)
-if fail: say(f'失敗: {fail}'); sys.exit(1)

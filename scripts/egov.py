@@ -1,18 +1,19 @@
 """e-Gov 法令API v2 の取得。1秒に1回まで。取得結果は data/api/cache に保存し、あれば取り直さない。"""
 import gzip, hashlib, json, os, time, urllib.parse, urllib.request
-BASE = 'https://laws.e-gov.go.jp/api/2'
+BASE = os.environ.get('EGOV_API_BASE', 'https://laws.e-gov.go.jp/api/2')   # 試すときだけ変える
 CACHE = os.environ.get('EGOV_CACHE', 'data/api/cache'); os.makedirs(CACHE, exist_ok=True)   # 置き場所は環境変数でも変えられる
 LOG = os.environ.get('EGOV_LOG', 'data/api/requests.log')
 _last = [0.0]
-def get(path, params=None, offline=False):
+def get(path, params=None, offline=False, refresh_404=False):
+    """refresh_404: 手元に残した答えが 404 なら、残したものを使わずに取り直す(毎週の追跡で、前に取れなかった本文を取り直すとき)"""
     q = urllib.parse.urlencode(sorted((params or {}).items()))
     url = f'{BASE}{urllib.parse.quote(path)}' + (f'?{q}' if q else '')
     key = hashlib.sha256(url.encode()).hexdigest()[:24]
     fp = os.path.join(CACHE, key + '.json')
-    if os.path.exists(fp):
-        with open(fp, encoding='utf-8') as f: return json.load(f)['body']
-    if os.path.exists(fp + '.gz'):
-        with gzip.open(fp + '.gz', 'rt', encoding='utf-8') as f: return json.load(f)['body']
+    for f_, op in ((fp, open), (fp + '.gz', lambda p, **k: gzip.open(p, 'rt', **k))):
+        if os.path.exists(f_):
+            with op(f_, encoding='utf-8') as f: body = json.load(f)['body']
+            if not (refresh_404 and not offline and body.get('_status') == 404): return body
     if offline: return {'_status': '未取得'}
     wait = 1.05 - (time.time() - _last[0])
     if wait > 0: time.sleep(wait)

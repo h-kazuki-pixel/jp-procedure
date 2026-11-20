@@ -8,7 +8,10 @@
 status.json の中身:
   last_checked … 最後に確かめた日(data/tracking/state.json の checked_through。e-Gov の更新をこの日まで見た)
   base         … 初めに比べた期間
-  weeks        … 週ごとの結果。期間、確かめた日時(UTC)、足した改正の記録の件数(0 件を含む)、手続の行、期間内の改正の数、取得の失敗、確かめの結果
+  weeks        … 週ごとの結果。期間、確かめた日時(UTC)、足した改正の記録の件数(0 件を含む)、手続の行、期間内の改正の数、取得の失敗、確かめの結果、
+                 その時点で確かめられなかった日と法令の数(unconfirmed_days・unconfirmed_laws)
+  unconfirmed  … いま確かめられていない日(e-Gov の更新データを取れなかった日)と法令(本文を取れなかった法令)の一覧。両方 0 のときは置かない。
+                 次の実行でもう一度取る(scripts/70_weekly_track.py の pending_days・failed_laws)
 確かめが通らなかった週は、ワークフローが main に入れないので、ここには残らない(Issue が立つ)。
 """
 import argparse, datetime, json, os, re
@@ -32,7 +35,11 @@ if not A.readme_only:
     state = json.load(open(f'{A.tracking}/state.json', encoding='utf-8'))
     run = json.load(open(f'{A.tracking}/last_run.json', encoding='utf-8'))
     wk = {'period': run['period'], 'checked_at': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-          'records': run['records'], 'rows': run['rows'], 'revisions': run.get('revisions', 0), 'failures': len(run.get('failures') or []), 'checks': A.checks}
+          'records': run['records'], 'rows': run['rows'], 'revisions': run.get('revisions', 0), 'failures': len(run.get('failures') or []), 'checks': A.checks,
+          'unconfirmed_days': len(run.get('unconfirmed_days') or []), 'unconfirmed_laws': len(run.get('unconfirmed_laws') or [])}
+    days, laws = sorted(state.get('pending_days', {})), sorted(state.get('failed_laws', {}))
+    if days or laws: st['unconfirmed'] = {'days': days, 'laws': laws, 'note': '確かめられなかった日(e-Gov の更新データを取れなかった日。「更新なし」とはみなさない)と、本文を取れなかった法令。次の実行でもう一度取る'}
+    else: st.pop('unconfirmed', None)
     st['weeks'] = [w for w in st['weeks'] if w['period'] != wk['period']] + [wk]
     st['last_checked'] = state['checked_through']
     with open(A.out, 'w', encoding='utf-8') as f: json.dump(st, f, ensure_ascii=False, indent=1); f.write('\n')
@@ -41,6 +48,7 @@ if not A.readme_only:
 w = st['weeks'][-1] if st['weeks'] else None
 line = (f"最後に確かめた日: **{st['last_checked']}**。"
         + (f"直近の週({w['period'][0]}〜{w['period'][1]})に足した改正の記録: {w['records']:,} 件。" if w else 'まだ毎週の追跡は動いていない。')
+        + (lambda u: ('確かめられなかった' + '・'.join(x for x in [f"日 {len(u['days'])}" if u['days'] else '', f"法令 {len(u['laws'])}" if u['laws'] else ''] if x) + '(次の実行でもう一度取る)。') if u and (u['days'] or u['laws']) else '')(st.get('unconfirmed'))
         + '(`status.json` から書いた行)')
 src = open(A.readme, encoding='utf-8').read()
 new, n = re.subn(r'(<!-- status -->).*?(<!-- /status -->)', lambda m: m.group(1) + line + m.group(2), src, flags=re.S)
