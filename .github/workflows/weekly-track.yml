@@ -1,4 +1,4 @@
-# 毎週の追跡(まだ動かしていない)。
+# 毎週の追跡。いまは予定(schedule)を外してあり、手で「Run workflow」を選んだときだけ動く(workflow_dispatch)。
 # 1. e-Gov 法令API v2 の一括ダウンロード(更新データ、過去 7 日)で更新された法令と、施行日が来た改正のある法令のうち、
 #    このデータが根拠に使う法令だけ本文を取り直し、根拠の条・項・号を比べて、改正の記録を data/rdf/weekly/ に足す。
 #    期間内に施行期日がある改正(このデータの法令のもの)は、改正の記録が 0 件の週でも data/rdf/weekly/ に置く。
@@ -9,11 +9,12 @@
 # 2b. 毎週、最後に確かめた日とその週の結果(足した記録の件数。0 件を含む)を status.json に書き、README の行を書き直して main に入れる。
 # 3. 記録を足して main に入れたら、作り直したデータで Cloud Run の SPARQL を入れ替える(vars.DEPLOY_ENABLED が 'true' のときだけ)。
 #    手で「Run workflow」を選び deploy_only に印を付けると、追跡はせず、入れ替えだけを試せる(deploy.md の手順 9)。
-# 4. 2 週続けて失敗したら Issue を立てる。
+# 4. 2 回続けて失敗したら Issue を立てる。
+# 毎週の予定に戻すときは、on: に次の 2 行を足す(毎週月曜 06:00 日本時間):
+#   schedule:
+#     - cron: '0 21 * * 0'
 name: weekly-track
 on:
-  schedule:
-    - cron: '0 21 * * 0'   # 毎週月曜 06:00(日本時間)
   workflow_dispatch:
     inputs:
       deploy_only:
@@ -71,6 +72,8 @@ jobs:
           set -o pipefail
           pip install rdflib==7.6.0 pyshacl==0.40.2 pyoxigraph==0.5.13
           mkdir -p data/vocab out && curl -fsSL "$CPSV_SHACL_URL" -o "$CPSV_SHACL"
+          # 手元の確かめで使ったものと同じファイルか(違えば止める)
+          sha256sum -c shapes/cpsv-ap-3.2.0-SHACL.ttl.sha256
           python3 scripts/56_split_for_shacl.py full
           python3 scripts/59_shacl_split.py full | tee out/59_shacl_full.txt
           STORE=store/oxigraph python3 scripts/62_oxigraph_load.py
@@ -121,6 +124,12 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: プロジェクト番号を記録で伏せる
+        env:
+          N: ${{ secrets.GCP_PROJECT_NUMBER }}
+        run: |
+          if [ -z "$N" ]; then echo "秘密 GCP_PROJECT_NUMBER が無い"; exit 1; fi
+          echo "::add-mask::$N"
       - uses: actions/checkout@v4
         with:
           ref: main

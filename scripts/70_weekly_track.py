@@ -186,7 +186,8 @@ if (recs or win_revs) and not A.dry_run:
 if not A.dry_run:
     if not fail: state['checked_through'] = end
     json.dump(state, open(state_fp, 'w'), ensure_ascii=False, indent=1)
-    with gzip.open(rv_fp, 'wt', encoding='utf-8', newline='') as g:
+    # 中身が同じなら同じバイトになるように、gzip の頭の日時を 0 にし、ファイル名を入れない
+    with open(rv_fp, 'wb') as raw, io.TextIOWrapper(gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0), encoding='utf-8', newline='') as g:
         w = csv.DictWriter(g, fieldnames=['law_id', 'law_revision_id', 'amendment_enforcement_date', 'amendment_law_num', 'current_revision_status', 'source'], extrasaction='ignore')
         w.writeheader(); [w.writerow(r) for r in REV.values()]
 json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'counts': dict(cnt), 'failures': fail, 'log': log},
