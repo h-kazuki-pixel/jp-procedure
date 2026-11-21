@@ -13,6 +13,11 @@ procs = int(run('q5_count_procedures.rq')[0]['procedures'])
 per = {}
 for r in run('q6_changes_by_period.rq'): per[(r['start'], r['end'])] = {'changes': int(r['changes']), 'notified': int(r['notified']), 'law_level': 0}
 for r in run('q7_law_level_by_period.rq'): per.setdefault((r['start'], r['end']), {'changes': 0, 'notified': 0, 'law_level': 0})['law_level'] = int(r['law_level'])
+# 根拠の法令が廃止・失効した記録(条文の文言の比べとは別に数える。0 の期間も置く)
+for v in per.values(): v.update(law_status_laws=0, law_status_procedures=0)
+for r in run('q8_law_status_by_period.rq'):
+    v = per.setdefault((r['start'], r['end']), {'changes': 0, 'notified': 0, 'law_level': 0, 'law_status_laws': 0, 'law_status_procedures': 0})
+    v['law_status_laws'] = int(r['laws']); v['law_status_procedures'] = int(r['procedures'])
 # 府省庁ごと(q3。期間は問いの中に書いた 2025-11-01〜2026-11-18)。並びは問いのまま(変わった手続の多い順)に、同じ数は府省庁名で決める
 mins = [{'ministry': r['ministry'], 'procedures': int(r['procedures']), 'changed': int(r['changed']), 'percent': float(r['percent'])} for r in run('q3_changed_by_ministry.rq')]
 mins.sort(key=lambda x: (-x['changed'], x['ministry']))
@@ -22,8 +27,8 @@ for f in files: h.update(os.path.relpath(f, RDFDIR).encode() + b'\0' + hashlib.s
 S = {'procedures': procs,
      'periods': [{'start': s, 'end': e, **v, 'ratio': round(v['law_level'] / v['notified'], 1) if v['notified'] else None} for (s, e), v in sorted(per.items())],
      'ministries': {'start': '2025-11-01', 'end': '2026-11-18', 'rows': mins},
-     'queries': {'procedures': 'queries/q5_count_procedures.rq', 'changes': 'queries/q6_changes_by_period.rq', 'notified': 'queries/q6_changes_by_period.rq', 'law_level': 'queries/q7_law_level_by_period.rq', 'ministries': 'queries/q3_changed_by_ministry.rq'},
-     'note': 'notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた',
+     'queries': {'procedures': 'queries/q5_count_procedures.rq', 'changes': 'queries/q6_changes_by_period.rq', 'notified': 'queries/q6_changes_by_period.rq', 'law_level': 'queries/q7_law_level_by_period.rq', 'law_status': 'queries/q8_law_status_by_period.rq', 'ministries': 'queries/q3_changed_by_ministry.rq'},
+     'note': 'notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。law_status_laws・law_status_procedures = 根拠の法令が廃止・失効した記録の法令の数と、それを根拠に挙げる手続の数(notified とは別に数える。初めの期間の分は 2026-11-21 の補い)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた',
      'data_sha256': h.hexdigest(), 'data_files': len(files)}
 with open(out, 'w', encoding='utf-8') as f: json.dump(S, f, ensure_ascii=False, indent=1); f.write('\n')
 print(json.dumps({k: S[k] for k in ['procedures', 'periods']}, ensure_ascii=False))

@@ -7,6 +7,8 @@
    "changes": 2064,
    "notified": 3090,
    "law_level": 47352,
+   "law_status_laws": 13,
+   "law_status_procedures": 207,
    "ratio": 15.3
   },
   {
@@ -15,6 +17,8 @@
    "changes": 16,
    "notified": 22,
    "law_level": 687,
+   "law_status_laws": 0,
+   "law_status_procedures": 0,
    "ratio": 31.2
   }
  ],
@@ -179,9 +183,10 @@
   "changes": "queries/q6_changes_by_period.rq",
   "notified": "queries/q6_changes_by_period.rq",
   "law_level": "queries/q7_law_level_by_period.rq",
+  "law_status": "queries/q8_law_status_by_period.rq",
   "ministries": "queries/q3_changed_by_ministry.rq"
  },
- "note": "notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた",
- "data_sha256": "4c8f6397450a885003085eaf950c41aa08b5d4bb1b997fe74d91c25b5844ee51",
- "data_files": 11
+ "note": "notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。law_status_laws・law_status_procedures = 根拠の法令が廃止・失効した記録の法令の数と、それを根拠に挙げる手続の数(notified とは別に数える。初めの期間の分は 2026-11-21 の補い)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた",
+ "data_sha256": "9c4b8ff9c98396e7c6ffe763b0fdf026c935b21c6642a7f5425d0af8573d0dca",
+ "data_files": 12
 }

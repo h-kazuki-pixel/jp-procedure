@@ -159,9 +159,9 @@ done
    - 条件の中の `assertion.repository_id` は、GitHub のトークンの値をそのまま見るので、`--attribute-mapping` を変えなくてよい。
 8. **GitHub の設定を入れる**(リポジトリの Settings → Secrets and variables → Actions)
    - Secrets: `GCP_WIF_PROVIDER` = `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/providers/jp-procedure-main`、`GCP_SERVICE_ACCOUNT` = `jp-procedure-deployer@<PROJECT_ID>.iam.gserviceaccount.com`、`GCP_PROJECT_NUMBER` = `<PROJECT_NUMBER>`(入れ替えの段の初めに add-mask で記録から伏せる)
-   - Variables: `GCP_PROJECT_ID` = `<PROJECT_ID>`、`DEPLOY_ENABLED` = `false`(9 で試すときだけ `true` にする)
+   - Variables: `GCP_PROJECT_ID` = `<PROJECT_ID>`、`DEPLOY_ENABLED` = `false`(毎週の追跡のあとの自動の入れ替えを止めておく。手で deploy_only を選ぶ入れ替えは、この値によらず動く)
 9. **公開の日より前に、GitHub Actions で入れ替えを一度試す**
-   - `DEPLOY_ENABLED` を `true` にする。
+   - `DEPLOY_ENABLED` は変えなくてよい(手で deploy_only を選んだときは、この値によらず入れ替える)。
    - Actions の weekly-track を「Run workflow」で、main を選び、`deploy_only` に印を付けて動かす。追跡はせず、今の main の `data/rdf/` からイメージを作り直して入れ替える段だけが動く。
    ```sh
    gh workflow run weekly-track.yml -R <OWNER>/<REPO> --ref main -f deploy_only=true
@@ -172,7 +172,7 @@ done
      - Cloud Run に新しいリビジョンができ、イメージの札が `manual-<実行の番号>` になったか(手で deploy_only を選んだとき。毎週の追跡で記録を足したときは、確かめた日 `YYYY-MM-DD`)(`gcloud run services describe jp-procedure-sparql --region asia-northeast1 --format='value(status.latestReadyRevisionName,spec.template.spec.containers[0].image)'`)。
      - 認証の形が変わっていないか(公開してあるので、認証なしで 200 のまま。ワークフローは認証の形を変えない)。
      - 5 の測るスクリプトで、トリプルの数と問いの時間が前と同じか。
-   - 試したあと、毎週の入れ替えを続けるなら `DEPLOY_ENABLED` を `true` のままにする。続けないなら `false` に戻す。
+   - 毎週の追跡のあとに自動で入れ替えるなら `DEPLOY_ENABLED` を `true` にする。自動で入れ替えないなら `false` のままにする(手の入れ替えは、どちらでも動く)。
    - ワークフローの入れ替えでは、認証の形(`--allow` / `--no-allow-unauthenticated`)を指定しない。公開の日に変えた形を毎週戻さないため。入れ替え用のアカウントは、呼び出しの IAM を変えられない。
 
 ## 公開の日に行うこと

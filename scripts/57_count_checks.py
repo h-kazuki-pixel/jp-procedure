@@ -29,7 +29,7 @@ rev_found = {}   # 毎週の追跡が初めて足した改正 → 初めて見�
 t0 = time.time()
 CHG = set()   # changes の回(X・Xc・Ew)のトリプル(rdflib)。ほかの回にあるものは後で除く
 typ = collections.defaultdict(set); typ_ex = set(); wreal = set(); wasof = collections.defaultdict(set); per_of = {}; objs = collections.defaultdict(list); ident = []; asof = collections.Counter(); real = set(); realized_by = set()
-ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; periods = {}; rev_id = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set)
+ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; lsc = {}; lst = {}; periods = {}; rev_id = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set)
 for src, files in SRC.items():
     for fn in files:
         g = rdflib.Graph(); g.parse(gzip.open(f'{D}/{fn}.ttl.gz'), format='turtle')
@@ -67,6 +67,9 @@ for src, files in SRC.items():
             for ch in g.subjects(RDF.type, JPP.ProvisionChange):
                 chg[ch].update(found=g.value(ch, JPP.foundRevision), found_on=str(g.value(ch, JPP.foundOn) or ''), before=g.value(ch, JPP.enforcedBeforePeriod), recheck=g.value(ch, JPP.recheckReason))
             for rv in g.subjects(RDF.type, JPP.LawRevision): rev_id[rv] = str(g.value(rv, DCT.identifier))
+            for c in g.subjects(RDF.type, JPP.LawStatusChange):
+                lsc[c] = dict(law=g.value(c, JPP.law), per=str(g.value(c, DCT.temporal)).rsplit('/', 1)[-1], date=str(g.value(c, JPP.repealDate)), aff=set(g.objects(c, JPP.affects)))
+            for c in g.subjects(RDF.type, JPP.LawStatus): lst[g.value(c, JPP.statusOf)] = str(g.value(c, JPP.repealDate))
             for rv in g.subjects(RDF.type, JPP.Review): reviews[rv] = (str(g.value(rv, JPP.reviewerType)).rsplit('/', 1)[-1], str(g.value(rv, JPP.reviewResult)).rsplit('/', 1)[-1])
             review_ref.update(g.objects(None, JPP.review))
             for pr in g.subjects(RDF.type, DCT.PeriodOfTime): periods[str(pr).rsplit('/', 1)[-1]] = (str(g.value(pr, DCAT.startDate)), str(g.value(pr, DCAT.endDate)))
@@ -196,12 +199,31 @@ for k, (ps0, pe0) in sorted(periods.items(), key=lambda x: x[1]):
     mine[(ps0, pe0)] = (len(chs), len(nt), len(ll))
     print(f'     {ps0}〜{pe0}: 改正の記録 {len(chs):,} / 知らせる手続 {len(nt):,} / 法令の単位で知らせた場合の手続 {len(ll):,}(期間内の改正 {sum(1 for r in rev_of if ps0 < rev_date[r] <= pe0 and rev_found.get(r, '') <= pe0):,})')
     chk(f'{ps0}〜{pe0}: 知らせる手続が、法令の単位で知らせた場合の手続(期間に見つけた改正で数える)に含まれる', nt <= ll, True)
+# 根拠の法令が廃止・失効した記録(jpp:LawStatusChange。条文の文言の比べとは別に数える)と、法令の状態(jpp:LawStatus)
+print(f'\n# 根拠の法令の廃止・失効(記録 {len(lsc)}・法令の状態 {len(lst)})')
+law_cites = collections.defaultdict(set)
+for p_, c_ in cit_of.items():
+    if c_ in cit_law: law_cites[cit_law[c_]].add(p_)
+ls_mine = {}
+if lsc:
+    chk('廃止・失効の記録の手続が手続の中にある', all(v['aff'] <= ps for v in lsc.values()), True)
+    chk('廃止・失効の記録の手続 = その法令を根拠に挙げる(jpp:citedLaw)すべての手続', all(v['aff'] == law_cites[v['law']] for v in lsc.values()), True)
+    chk('廃止・失効の日が、その記録の期間の中にある', all(periods[v['per']][0] < v['date'] <= periods[v['per']][1] for v in lsc.values()), True)
+    chk('同じ法令・同じ期間の記録が 2 つ無い', len({(v['law'], v['per']) for v in lsc.values()}) == len(lsc), True)
+    chk('廃止・失効の記録の法令に、同じ日の法令の状態がある', all(lst.get(v['law']) == v['date'] for v in lsc.values()), True)
+    for k, (s0, e0) in sorted(periods.items(), key=lambda x: x[1]):
+        vs = [v for v in lsc.values() if v['per'] == k]
+        ls_mine[(s0, e0)] = (len({v['law'] for v in vs}), len(set().union(*[v['aff'] for v in vs])) if vs else 0)
+        if vs: print(f'     {s0}〜{e0}: 法令 {ls_mine[(s0, e0)][0]:,} / 手続 {ls_mine[(s0, e0)][1]:,}')
+if lst: chk('法令の状態の法令が、法令の中にある', set(lst) <= law, True)
 STATS = os.environ.get('STATS')
 if STATS and os.path.exists(STATS):
     st = json.load(open(STATS, encoding='utf-8'))
     chk(f'{STATS} の手続の数', st['procedures'], len(ps))
     got = {(x['start'], x['end']): (x['changes'], x['notified'], x['law_level']) for x in st['periods']}
     chk(f'{STATS} の期間の集合 = 期間の節点の集合', set(got) == set(mine), True)
+    got_ls = {(x['start'], x['end']): (x.get('law_status_laws', 0), x.get('law_status_procedures', 0)) for x in st['periods']}
+    chk(f'{STATS} の期間ごとの(廃止・失効した法令, その手続)が、数え直したものと同じ', {k: v for k, v in got_ls.items() if v != (0, 0)} == {k: v for k, v in ls_mine.items() if v != (0, 0)}, True)
     for key in sorted(mine):
         chk(f'{STATS} {key[0]}〜{key[1]} の(改正の記録, 知らせる手続, 法令の単位)', got.get(key), mine[key])
     # 府省庁ごと(閲覧ページの「府省庁ごと」。75 が q3 で出したもの)を、所管と府省庁名と改正の記録から数え直して比べる

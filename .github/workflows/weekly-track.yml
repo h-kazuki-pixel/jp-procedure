@@ -8,7 +8,7 @@
 #    記録が 0 件の週は確かめを回さず、Release も出さない。
 # 2b. 毎週、最後に確かめた日とその週の結果(足した記録の件数。0 件を含む)を status.json に書き、README の行を書き直して main に入れる。
 # 3. 記録を足して main に入れたら、作り直したデータで Cloud Run の SPARQL を入れ替える(vars.DEPLOY_ENABLED が 'true' のときだけ)。
-#    手で「Run workflow」を選び deploy_only に印を付けると、追跡はせず、入れ替えだけを試せる(deploy.md の手順 9)。
+#    手で「Run workflow」を選び deploy_only に印を付けると、追跡はせず、入れ替えだけをする(DEPLOY_ENABLED によらない。deploy.md の手順 9)。
 # 4. 2 回続けて失敗したら Issue を立てる。
 # 5. e-Gov から取れなかった日(更新データ)と法令(本文)は、失敗にせず state.json に残し、次の実行でもう一度取る(取れた分は 2 のとおり main に入れる)。
 #    更新データが取れない日は法令API v1 の更新法令一覧を引き、0 件なら「更新法令なし(v1 の一覧で 0 件)」として外す。
@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy_only:
-        description: '追跡はせず、今の main のデータで Cloud Run の入れ替えだけを試す(DEPLOY_ENABLED が true のときだけ動く)'
+        description: '追跡はせず、今の main のデータで Cloud Run を入れ替える(DEPLOY_ENABLED によらず動く)'
         type: boolean
         default: false
 permissions:
@@ -46,6 +46,7 @@ jobs:
       pushed: ${{ steps.push.outputs.pushed }}
       long_pending: ${{ steps.track.outputs.long_pending }}
       v1_mismatch: ${{ steps.track.outputs.v1_mismatch }}
+      law_changes: ${{ steps.track.outputs.law_changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -65,11 +66,11 @@ jobs:
           python3 scripts/70_weekly_track.py --days 7
           python3 - <<'EOF' >> "$GITHUB_OUTPUT"
           import json; r = json.load(open('data/tracking/last_run.json'))
-          print(f"records={r['records']}"); print(f"revisions={r.get('revisions', 0)}"); print(f"end={r['period'][1]}"); print(f"long_pending={len(r.get('long_pending') or [])}"); print(f"v1_mismatch={len(r.get('v1_mismatch') or [])}")
+          print(f"records={r['records']}"); print(f"revisions={r.get('revisions', 0)}"); print(f"end={r['period'][1]}"); print(f"long_pending={len(r.get('long_pending') or [])}"); print(f"v1_mismatch={len(r.get('v1_mismatch') or [])}"); print(f"law_changes={r.get('law_changes', 0) + r.get('law_status_added', 0)}")
           EOF
       - name: 確かめ(自作 SHACL・公式 CPSV-AP SHACL・全体の数)と、はじめの画面の数(stats.json)
         id: checks
-        if: steps.track.outputs.records != '0' || steps.track.outputs.revisions != '0'
+        if: steps.track.outputs.records != '0' || steps.track.outputs.revisions != '0' || steps.track.outputs.law_changes != '0'
         env:
           RDF_DIR: data/rdf
           SHAPES: shapes/shapes.ttl
@@ -146,9 +147,11 @@ jobs:
   deploy:
     needs: track
     # 毎週: データ(改正の記録か期間内の改正)を足して main に入れたときだけ。手で deploy_only を選んだとき: 追跡を飛ばして入れ替えだけ
+    # 手で deploy_only を選んだときは DEPLOY_ENABLED によらず入れ替える。自動の入れ替え(追跡のあと)は DEPLOY_ENABLED が 'true' のときだけ
     if: >-
-      ${{ always() && vars.DEPLOY_ENABLED == 'true' && (
-        (needs.track.result == 'success' && needs.track.outputs.pushed == 'true' && (needs.track.outputs.records != '0' || needs.track.outputs.revisions != '0')) ||
+      ${{ always() && (
+        (vars.DEPLOY_ENABLED == 'true' && needs.track.result == 'success' && needs.track.outputs.pushed == 'true' &&
+          (needs.track.outputs.records != '0' || needs.track.outputs.revisions != '0' || needs.track.outputs.law_changes != '0')) ||
         (github.event_name == 'workflow_dispatch' && inputs.deploy_only) ) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60

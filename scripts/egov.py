@@ -4,8 +4,9 @@ BASE = os.environ.get('EGOV_API_BASE', 'https://laws.e-gov.go.jp/api/2')   # 試
 CACHE = os.environ.get('EGOV_CACHE', 'data/api/cache'); os.makedirs(CACHE, exist_ok=True)   # 置き場所は環境変数でも変えられる
 LOG = os.environ.get('EGOV_LOG', 'data/api/requests.log')
 _last = [0.0]
-def get(path, params=None, offline=False, refresh_404=False):
-    """refresh_404: 手元に残した答えが 404 なら、残したものを使わずに取り直す(毎週の追跡で、前に取れなかった本文を取り直すとき)"""
+def get(path, params=None, offline=False, refresh_404=False, refresh=False):
+    """refresh_404: 手元に残した答えが 404 なら、残したものを使わずに取り直す(毎週の追跡で、前に取れなかった本文を取り直すとき)
+    refresh: 手元に残した答えがあっても取り直し、残したものを新しい答えで置き換える(毎週の追跡で、廃止・失効の一覧を毎回取るとき)"""
     q = urllib.parse.urlencode(sorted((params or {}).items()))
     url = f'{BASE}{urllib.parse.quote(path)}' + (f'?{q}' if q else '')
     key = hashlib.sha256(url.encode()).hexdigest()[:24]
@@ -13,7 +14,7 @@ def get(path, params=None, offline=False, refresh_404=False):
     for f_, op in ((fp, open), (fp + '.gz', lambda p, **k: gzip.open(p, 'rt', **k))):
         if os.path.exists(f_):
             with op(f_, encoding='utf-8') as f: body = json.load(f)['body']
-            if not (refresh_404 and not offline and body.get('_status') == 404): return body
+            if not ((refresh_404 and body.get('_status') == 404) or refresh) or offline: return body
     if offline: return {'_status': '未取得'}
     wait = 1.05 - (time.time() - _last[0])
     if wait > 0: time.sleep(wait)
@@ -40,4 +41,5 @@ def get(path, params=None, offline=False, refresh_404=False):
     body = {'_status': status, **(body if isinstance(body, dict) else {'_raw': body})}
     if status in (200, 404):  # 一時的エラーはキャッシュしない
         with gzip.open(fp + '.gz', 'wt', encoding='utf-8') as f: json.dump({'url': url, 'body': body}, f, ensure_ascii=False)
+        if os.path.exists(fp): os.remove(fp)   # 古い形(gzip でない)の答えが残っていると、取り直した答えより先に読まれるため
     return body

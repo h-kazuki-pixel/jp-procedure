@@ -23,6 +23,10 @@
   - 公開しているデータに新しい版が無かった条・項・号の記録には、あとで比べた理由(jpp:recheckReason)を書く:
     その法令に 2026-11-18 の版が 1 つも無い → 初めに版を取れなかった(code/recheck-reason/version-missing)。
     その法令にはある → 初めの比べで位置を決められなかった(code/recheck-reason/position-undetermined)。
+根拠の法令の廃止・失効(scripts/law_status.py):
+  - e-Gov 法令API v2 の法令一覧(廃止等の状態で絞ったもの)を毎回取り直し、根拠に挙がる法令を判定する。期間の中で廃止・失効した法令は
+    区分「根拠の法令が廃止・失効した」の記録(jpp:LawStatusChange)にし、その法令を根拠に挙げるすべての手続に付ける。期間より前のものは
+    法令の状態(jpp:LawStatus)だけを足す。どちらも公開しているデータにあれば足さない。一覧が取れなければ、この回は判定しない(law_status_error)。
 取れなかったもの:
   - 更新データ(一括ダウンロード)が取れなかった日(状態が 200 でない・zip でない)は、法令API v1 の更新法令一覧(/api/1/updatelawlists/{日付})を引く。
     「取得結果が０件」なら「更新法令なし(v1 の一覧で 0 件)」として取り直しの対象から外す(e-Gov の説明に、更新の無い日の返し方の明記は無い。
@@ -37,7 +41,7 @@
 import sys, os, re, io, csv, gzip, json, time, glob, difflib, zipfile, argparse, datetime, collections, urllib.request, urllib.error
 import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import egov
+import egov, law_status
 from clause import article_index
 import change_rules
 from rdf_config import BASE, PREFIXES
@@ -138,13 +142,15 @@ if os.path.exists(rv_fp):
 for lid, rid, ed, un, num, d in upd:
     REV.setdefault(rid, {'law_id': lid, 'law_revision_id': rid, 'amendment_enforcement_date': ed, 'amendment_law_num': num, 'current_revision_status': 'UnEnforced' if un else '', 'source': f'bulk {d}'})
 # ---- 3. このデータが根拠に使う条・項・号
-cited = collections.defaultdict(set); cur = None
+cited = collections.defaultdict(set); cur = None; law_procs = collections.defaultdict(set)   # law_procs: 法令ID → その法令を根拠に挙げる(jpp:citedLaw)手続
 for line in gzip.open(f'{A.data}/procedures.ttl.gz', 'rt', encoding='utf-8'):
     m = re.match(r'^<' + re.escape(BASE) + r'record/r7/([^/>]+)/citation>', line)
     if m: cur = m.group(1); continue
     if line.startswith('<'): cur = None; continue
     m = re.match(r'\s+jpp:citedProvision <' + re.escape(BASE) + r'([^>]+)>', line)
     if m and cur: cited[m.group(1)].add(cur)
+    m = re.match(r'\s+jpp:citedLaw <' + re.escape(BASE) + r'law/([^>]+)>', line)
+    if m and cur: law_procs[m.group(1)].add(cur)
 level = {}; plabel = {}
 WEEKLY = sorted(glob.glob(f'{A.data}/weekly/*.ttl.gz'))
 for fn in [f'{A.data}/provisions.ttl.gz', f'{A.data}/changes.ttl.gz'] + WEEKLY:
@@ -159,7 +165,7 @@ for fn in [f'{A.data}/provisions.ttl.gz', f'{A.data}/changes.ttl.gz'] + WEEKLY:
 # 公開しているデータの文言(旧い側): 本文の版(expressions と weekly/ の版)のうち jpp:asOf の最も新しいもの。無くなったと記録した(新しい版の無い改正の記録)のがそれより後なら「無い」
 UNESC = {'\\\\': '\\', '\\"': '"', '\\n': '\n', '\\r': '\r', '\\t': '\t'}
 def unesc(s): return re.sub(r'\\[\\"nrt]', lambda m: UNESC[m.group(0)], s)
-pub_ex = {}; pub_rm = {}; all_pub_ex = set(); pub_revs = set()   # pub_revs: 公開しているデータにある改正の節点(law_revision_id)   # 条・項・号 → (asOf, 版の path, law_revision_id, 文言) / 条・項・号 → 無くなったと記録した期間の終わり
+pub_ex = {}; pub_rm = {}; all_pub_ex = set(); pub_revs = set(); pub_lstatus = set(); pub_lchange = set()   # pub_lstatus・pub_lchange: 公開しているデータにある法令の状態・廃止の記録(法令ID)   # pub_revs: 公開しているデータにある改正の節点(law_revision_id)   # 条・項・号 → (asOf, 版の path, law_revision_id, 文言) / 条・項・号 → 無くなったと記録した期間の終わり
 def read_pub():
     for fn in [f'{A.data}/expressions.ttl.gz', f'{A.data}/changes.ttl.gz'] + WEEKLY:
         blk = None
@@ -178,6 +184,8 @@ def read_pub():
                 if m: blk = {'type': 'ex' if m.group(2) == 'eli:LegalExpression' else 'ch', 's': m.group(1), 'asof': []}
                 m = re.match(r'^<' + re.escape(BASE) + r'law/[^/]+/revision/([^>]+)> a jpp:LawRevision', line)
                 if m: pub_revs.add(m.group(1))
+                m = re.match(r'^<' + re.escape(BASE) + r'law/([^/>]+)/(status|repeal/[^>]+)> a jpp:(LawStatus|LawStatusChange) ', line)
+                if m: (pub_lstatus if m.group(3) == 'LawStatus' else pub_lchange).add(m.group(1))
                 m = re.match(r'^<' + re.escape(BASE) + r'([^>]+/version/[^>]+)> jpp:asOf "([0-9-]+)"', line)   # 版に確かめた日だけを足した行(毎週の追跡)
                 if m: ex_info.setdefault(m.group(1), {'asof': []})['asof'].append(m.group(2))
                 continue
@@ -300,6 +308,20 @@ say(f'  足す改正の記録: {len(recs)}(手続の行 {sum(len(r["procs"]) for
 LAWS = set(re.findall(r'^<' + re.escape(BASE) + r'law/([0-9A-Za-z]+)> a eli:LegalResource', gzip.open(f'{A.data}/laws.ttl.gz', 'rt', encoding='utf-8').read(), flags=re.M))
 win_revs = sorted(x['law_revision_id'] for x in REV.values() if x['law_id'] in LAWS and start_all < (x['amendment_enforcement_date'] or '') <= end)
 say(f'  期間内に施行期日がある改正(このデータの法令): {len(win_revs)}(法令 {len({REV[x]["law_id"] for x in win_revs})})')
+# ---- 5b. 根拠の法令の廃止・失効(e-Gov の法令一覧。毎回取り直す。判定の決まりは law_status.py)
+LS, ls_urls, ls_err = law_status.fetch(egov, offline=A.offline)
+law_changes = []; law_status_new = []; law_unclear = []
+if LS is None: say(f'  廃止・失効の一覧を取れなかった({ls_err})。この回は判定しない(次の実行でもう一度取る)')
+else:
+    for lid in sorted(law_procs):
+        info = LS.get(lid)
+        if not info: continue
+        j = law_status.judge(info, start_all, end)
+        if j == 'unclear': law_unclear.append({'law': lid, 'repeal_status': info.get('repeal_status'), 'repeal_date': info.get('repeal_date'), 'current_revision_status': info.get('current_revision_status')}); continue
+        if j == 'in-period' and lid not in pub_lchange: law_changes.append((lid, info))
+        if j in ('in-period', 'before') and lid not in pub_lstatus: law_status_new.append((lid, info))
+    say(f'  廃止・失効の一覧: {len(LS)} 法令。根拠に挙がる法令のうち 期間の中で廃止・失効 {len(law_changes)}(手続 {len(set().union(*[law_procs[l] for l, _ in law_changes])) if law_changes else 0})・'
+        f'状態を足す {len(law_status_new)}・分類しない {len(law_unclear)}')
 # ---- 6. 書き出し
 def lit(s, lang=None, dt=None):
     s = str(s).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
@@ -342,7 +364,7 @@ def mpos(m):   # 移った先(附則, 条, 項, 号)→ 位置と深さ
     sup, art, pn, it = m
     return {'附則': sup, '条': art, '項': pn, '号': it}, ('号' if it is not None else '項' if pn is not None else '条')
 written = set()
-if (recs or win_revs or vers_only) and not A.dry_run:
+if (recs or win_revs or vers_only or law_changes or law_status_new) and not A.dry_run:
     os.makedirs(f'{A.data}/weekly', exist_ok=True)
     PER = f'{start_all}_{end}'; fn = f'{A.data}/weekly/changes_{PER}.ttl.gz'
     f = gzip.open(fn, 'wt', encoding='utf-8')
@@ -383,6 +405,10 @@ if (recs or win_revs or vers_only) and not A.dry_run:
                 ('jpp:recheckReason', iri(f'code/recheck-reason/{r["recheck"]}') if r.get('recheck') else None)]
         pos += [('jpp:affects', iri(f'procedure/{p}')) for p in r['procs']]
         s(iri(f'change/{r["pv"][len("provision/"):]}/{per}'), pos)
+    for lid, info in law_changes:   # 期間の中で廃止・失効した根拠の法令(文言の比べとは別の区分)
+        law_status.change_node(s, iri, lit, lid, info, f'{start_all}_{end}', end, ls_urls[0], ACT, law_procs[lid])
+    for lid, info in law_status_new:   # 法令の状態(期間の始め以前に廃止・失効していたものは、変化に数えずこれだけ)
+        law_status.status_node(s, iri, lit, lid, info, end, ls_urls[0])
     for v in vers_only:   # 公開しているデータに新しい版が無かった条・項・号で、今の文言が同じもの: 版だけ足す(jpp:asOf が取った日)
         write_version(v['pv'], v['ni'], v['p'], v['dep'], v['nrv'], end, s)
     for x in sorted(revs_used):
@@ -412,7 +438,9 @@ long_pending = [{'day': d, 'since': v['since'], 'error': v.get('error')} for d, 
 if fail: say(f'取れなかったもの(次の実行でもう一度取る): {fail}')
 if corr_new: say(f'  版を変えない直し(e-Gov)を新しく見つけた: {len(corr_new)}(改正の記録にしない。{corr_fp} に書いた)')
 if v1_mismatch: say(f'  v1 の一覧の件数と更新データの行数が合わない日: {v1_mismatch}')
-json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'versions_added': len(vers_only), 'counts': dict(cnt), 'failures': fail,
+json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'versions_added': len(vers_only),
+           'law_changes': len(law_changes), 'law_change_procedures': len(set().union(*[law_procs[l] for l, _ in law_changes])) if law_changes else 0,
+           'law_status_added': len(law_status_new), 'law_status_unclear': law_unclear, 'law_status_error': ls_err, 'counts': dict(cnt), 'failures': fail,
            'unconfirmed_days': sorted(pending), 'unconfirmed_laws': sorted(state['failed_laws']), 'long_pending': long_pending, 'skipped': skipped,
            'days': {d: day_note[d] for d in sorted(day_note)}, 'no_update_days': sorted(no_update), 'v1_mismatch': v1_mismatch, 'corrections_new': corr_new, 'log': log},
           open(f'{A.tracking}/last_run.json', 'w'), ensure_ascii=False, indent=1)

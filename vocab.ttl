@@ -334,3 +334,62 @@ jpp:recheckReason a owl:ObjectProperty ;
     skos:prefLabel "初めに版を取れなかった"@ja ;
     skos:definition "初めの比べで、その法令の 2026-11-18 の版を取れなかった(e-Gov が 404 を返した・取っていない)。"@ja ;
     dct:issued "2026-11-21"^^xsd:date .
+jpp:LawStatusChange a owl:Class ;
+    rdfs:label "根拠の法令の廃止・失効の記録(法令 1 つ × 比べた期間 1 つ)"@ja ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:comment "比べた期間の中で廃止・失効した根拠の法令の記録。区分は code/change-kind/law-repealed。その法令を根拠に挙げる(jpp:citedLaw)すべての手続を jpp:affects で結ぶ。条文の文言の比べ(jpp:ProvisionChange)とは別に数える。状態と日付は e-Gov 法令API v2 の法令一覧の revision_info(repeal_status・repeal_date)で、今の版の状態(current_revision_status)が Repeal のものだけ(scripts/law_status.py)。"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+jpp:LawStatus a owl:Class ;
+    rdfs:label "法令の廃止・失効の状態(e-Gov の記録)"@ja ;
+    rdfs:comment "比べた期間の始め以前に廃止・失効していた法令は、変化に数えず、この状態だけを持たせる。経過措置で効力が残る場合がある。"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+jpp:law a owl:ObjectProperty ;
+    rdfs:label "廃止・失効した根拠の法令"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+jpp:statusOf a owl:ObjectProperty ;
+    rdfs:label "この状態の法令"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+jpp:repealStatus a owl:ObjectProperty ;
+    rdfs:label "廃止等の状態(コード表 code/repeal-status。e-Gov の repeal_status)"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+jpp:repealDate a owl:DatatypeProperty ;
+    rdfs:label "廃止等の日(e-Gov の repeal_date)"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+jpp:checkedOn a owl:DatatypeProperty ;
+    rdfs:label "e-Gov で状態を確かめた日"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/change-kind/law-repealed> a skos:Concept ;
+    skos:inScheme <https://w3id.org/jp-procedure/code/change-kind> ;
+    skos:notation "law-repealed" ;
+    skos:prefLabel "根拠の法令が廃止・失効した"@ja ;
+    skos:definition "根拠の法令が、比べた期間の中で廃止・失効した(e-Gov の記録)。jpp:LawStatusChange に使う。"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/repeal-status> a skos:ConceptScheme ;
+    skos:prefLabel "廃止等の状態(e-Gov の repeal_status)"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/repeal-status/repeal> a skos:Concept ;
+    skos:inScheme <https://w3id.org/jp-procedure/code/repeal-status> ;
+    skos:notation "Repeal" ;
+    skos:prefLabel "廃止"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/repeal-status/expire> a skos:Concept ;
+    skos:inScheme <https://w3id.org/jp-procedure/code/repeal-status> ;
+    skos:notation "Expire" ;
+    skos:prefLabel "失効"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/repeal-status/loss-of-effectiveness> a skos:Concept ;
+    skos:inScheme <https://w3id.org/jp-procedure/code/repeal-status> ;
+    skos:notation "LossOfEffectiveness" ;
+    skos:prefLabel "効力を失った"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/repeal-status/suspend> a skos:Concept ;
+    skos:inScheme <https://w3id.org/jp-procedure/code/repeal-status> ;
+    skos:notation "Suspend" ;
+    skos:prefLabel "停止"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .
+<https://w3id.org/jp-procedure/code/recheck-reason/law-status-not-checked> a skos:Concept ;
+    skos:inScheme <https://w3id.org/jp-procedure/code/recheck-reason> ;
+    skos:notation "law-status-not-checked" ;
+    skos:prefLabel "初めの比べは法令の廃止を見ていなかった"@ja ;
+    skos:definition "初めの比べ(2025-11-01〜2026-11-18)は条文の文言だけを見ていて、根拠の法令の廃止・失効を見ていなかった。2026-11-21 に別のファイルで補った。"@ja ;
+    dct:issued "2026-11-21"^^xsd:date .

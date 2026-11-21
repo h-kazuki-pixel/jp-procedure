@@ -1,0 +1,8 @@
+# (8) 比べた期間ごとの、根拠の法令が廃止・失効した記録(jpp:LawStatusChange)の数と、その法令を根拠に挙げる手続の数。
+# 条文の文言の比べ((6) の jpp:ProvisionChange)とは別に数える。初めの期間の分は、2026-11-21 に別のファイルで補ったもの(data/rdf/weekly/supplement_law-status_…)。
+SELECT ?start ?end (COUNT(DISTINCT ?law) AS ?laws) (COUNT(DISTINCT ?ps) AS ?procedures) WHERE {
+  ?c a jpp:LawStatusChange ; dct:temporal ?per ; jpp:law ?law ; jpp:affects ?ps .
+  ?per dcat:startDate ?start ; dcat:endDate ?end .
+}
+GROUP BY ?start ?end
+ORDER BY ?start ?end

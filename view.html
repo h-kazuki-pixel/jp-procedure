@@ -131,6 +131,7 @@ const CONFIG = {
     ['q5_count_procedures.rq', '手続の数(はじめの画面の「手続」)'],
     ['q6_changes_by_period.rq', '期間ごとの、改正の記録と知らせる手続の数(はじめの画面)'],
     ['q7_law_level_by_period.rq', '期間ごとの、法令の単位で知らせた場合の手続の数(はじめの画面。少し時間がかかる)'],
+    ['q8_law_status_by_period.rq', '期間ごとの、根拠の法令が廃止・失効した記録の法令と手続の数(はじめの画面)'],
   ],
   example: '119637',                                              // はじめの画面の例に出す手続
   repo: 'https://github.com/h-kazuki-pixel/jp-procedure',          // 判定のやり方などの文書の置き場所
@@ -300,9 +301,10 @@ async function pageHome(my) {
       <div class="stats">
         <div class="stat"><div class="num">${fmt(st.procedures)}</div><div class="lab">手続</div><div class="sub">令和7年度 棚卸調査${q('procedures')}</div></div>
         <div class="stat"><div class="num">${fmt(p.changes)}</div><div class="lab">根拠の条文の変化</div><div class="sub">改正の記録(条・項・号ごと)${q('changes')}</div></div>
-        <div class="stat"><div class="num">${fmt(p.notified)}</div><div class="lab">根拠の条文が変わった手続</div><div class="sub">根拠の条・項・号が変わった手続${q('notified')}</div></div>
+        <div class="stat"><div class="num">${fmt(p.notified)}</div><div class="lab">根拠の条文が変わった手続</div><div class="sub">根拠の条・項・号が変わった手続(初めの比べ)${q('notified')}</div></div>
+        ${p.law_status_procedures ? `<div class="stat"><div class="num">${fmt(p.law_status_procedures)}</div><div class="lab">根拠の法令が廃止・失効した手続</div><div class="sub">法令 ${fmt(p.law_status_laws)}。初めの比べは法令の廃止を見ていなかったので、あとで補った分(条文の変化とは別に数える)${q('law_status')}</div></div>` : ''}
       </div>` +
-      (later.length ? `<p class="muted">毎週の追跡で足した分: ${later.map(x => `${esc(x.start)}〜${esc(x.end)} 改正の記録 ${fmt(x.changes)}・根拠の条文が変わった手続 ${fmt(x.notified)}`).join('、')}</p>` : '');
+      (later.length ? `<p class="muted">毎週の追跡で足した分: ${later.map(x => `${esc(x.start)}〜${esc(x.end)} 改正の記録 ${fmt(x.changes)}・根拠の条文が変わった手続 ${fmt(x.notified)}` + (x.law_status_procedures ? `・根拠の法令が廃止・失効した手続 ${fmt(x.law_status_procedures)}` : '')).join('、')}</p>` : '');
   } catch (e) { if (my === seq) document.getElementById('stats').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 // はじめの画面の例: 1 つの手続の、旧い文言と新しい文言の違う所を小さな札で見せる。changed.json の抜き出しを使う(SPARQL は使わない)
@@ -328,11 +330,12 @@ function snipHtml(s) {
   if (s.type === 'moved') return `${esc(s.from)} → ${esc(s.to)}`;
   if (s.type === 'ambiguous') return `${esc(s.from)} → 候補 ${fmt(s.candidates)} 件`;
   if (s.type === 'gone') return esc(s.text);
+  if (s.type === 'law') return esc(s.text);
   return '';
 }
 async function pageChanged(params, my) {
   show(`<h1>変わった手続の一覧</h1>
-    <p class="muted"><span id="cpd">比べた期間</span>に、根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)。区分と抜き出しは機械の判定です(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。週の記録には、見つけた改正(新しい文言の版の改正)を区分の下に出します。</p>
+    <p class="muted"><span id="cpd">比べた期間</span>に、根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)と、根拠の法令が廃止・失効した手続(区分「根拠の法令が廃止・失効した」。e-Gov の記録)。区分と抜き出しは機械の判定です(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。週の記録には、見つけた改正(新しい文言の版の改正)を区分の下に出します。</p>
     <form class="search" id="cf"><div class="row">
       <span class="fld"><label for="cp">期間</label><select id="cp"></select></span>
       <span class="fld"><label for="ck">区分</label><select id="ck"><option value="">すべて</option></select></span>
@@ -364,7 +367,7 @@ async function pageChanged(params, my) {
   const link2 = k => { const ps = new URLSearchParams(); if (f.cp.value !== baseKey) ps.set('period', f.cp.value); if (f.ck.value) ps.set('kind', f.ck.value); if (f.cm.value) ps.set('org', f.cm.value); if (f.cq.value) ps.set('q', f.cq.value); if (k > 1) ps.set('page', k); return '#/changed' + (ps.toString() ? '?' + ps : ''); };
   const nav = pages > 1 ? `<p class="pager">${cur > 1 ? `<a href="${link2(cur - 1)}">前の ${PER} 件</a>` : ''} <span class="muted">${cur} / ${pages} ページ</span> ${cur < pages ? `<a href="${link2(cur + 1)}">次の ${PER} 件</a>` : ''}</p>` : '';
   document.getElementById('cl').innerHTML = `<p class="muted">${fmt(sel.length)} 件(全 ${fmt(rows.length)} 件)</p>${nav}<div class="scroll"><table class="stack"><thead><tr><th>手続ID</th><th>手続名</th><th>根拠</th><th>区分</th><th>違う所</th><th>所管</th></tr></thead><tbody>` +
-    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span>${f.cp.value === 'all' ? `<div class="muted small">${esc(r.start)}〜${esc(r.end)}</div>` : ''}${r.found ? `<div class="small found">${foundHtml(r.found, false, r.start)}</div>` : ''}</td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
+    sel.slice((cur - 1) * PER, cur * PER).map(r => `<tr><td data-l="手続ID">${esc(r.id)}</td><td>${link(r.ps, r.title)}</td><td data-l="根拠">${esc(r.law || '')} ${link(r.prov, r.provLabel)}</td><td data-l="区分"><span class="tag">${esc(r.kindLabel)}</span>${f.cp.value === 'all' ? `<div class="muted small">${esc(r.start)}〜${esc(r.end)}</div>` : ''}${r.found ? `<div class="small found">${foundHtml(r.found, false, r.start)}</div>` : ''}${r.lawStatus && r.lawStatus.recheck === 'law-status-not-checked' ? `<div class="small found"><span class="late recheck">補い</span> 初めの比べは法令の廃止を見ていなかったため、${esc(r.lawStatus.on)} に補いました。</div>` : ''}</td><td data-l="違う所" class="snip2">${snipHtml(r.snip)}</td><td data-l="所管">${esc(r.org || '')}</td></tr>`).join('') + `</tbody></table></div>${nav}`;
   f.addEventListener('change', () => { location.hash = link2(1); });
   f.addEventListener('submit', ev => { ev.preventDefault(); location.hash = link2(1); });
 }
@@ -522,6 +525,15 @@ async function pageProcedure(id, my) {
         OPTIONAL { ?c jpp:matchResult/skos:prefLabel ?mrLabel } } }`);
   const pChg = changeBlocks(`?ch jpp:affects ${iri(u)} .`, my, { showProv: true });
   pChg.catch(() => {});   // 先に基本の失敗を出す。変化の失敗は下で出す
+  // 根拠の法令の廃止・失効: 期間の中の記録(区分「根拠の法令が廃止・失効した」)と、期間の前に廃止・失効していた法令の状態
+  const pLaw = sparql(`SELECT ?c ?law ?lawLabel ?stLabel ?d ?on ?re ?start ?end ?src ?sLabel ?sd WHERE {
+      { ?c a jpp:LawStatusChange ; jpp:affects ${iri(u)} ; jpp:law ?law ; jpp:repealStatus/skos:prefLabel ?stLabel ; jpp:repealDate ?d ; jpp:foundOn ?on ;
+           dct:temporal ?per ; dct:source ?src . ?per dcat:startDate ?start ; dcat:endDate ?end . ?law rdfs:label ?lawLabel .
+        OPTIONAL { ?c jpp:recheckReason/skos:notation ?re } }
+      UNION
+      { ${iri(u)} jpp:hasCitation/jpp:citedLaw ?law . ?s jpp:statusOf ?law ; jpp:repealStatus/skos:prefLabel ?sLabel ; jpp:repealDate ?sd . ?law rdfs:label ?lawLabel .
+        FILTER NOT EXISTS { ?c2 a jpp:LawStatusChange ; jpp:law ?law } } }`);
+  pLaw.catch(() => {});
   let r;
   try {
     const rows = await pInfo;
@@ -540,9 +552,15 @@ async function pageProcedure(id, my) {
       ${r.desc ? `<p class="muted">${esc(r.desc)}</p>` : ''}`;
   } catch (e) { if (my === seq) fail(e); return; }
   try {
-    const html = await pChg;
+    const [html, lrows] = await Promise.all([pChg, pLaw]);
     if (my !== seq) return;
-    document.getElementById('chg').innerHTML = html === null ? `<p>比べた期間に、根拠の条・項・号の変化は見つかりませんでした${r.prov ? '' : '(根拠の条・項・号まで照合できていないので、比べていません)'}。</p>` : html;
+    const lawHtml = lrows.filter(x => x.c).map(x => `<div class="change">
+      <div><span class="tag">根拠の法令が廃止・失効した</span> <span class="muted">比べた期間 ${esc(x.start)}〜${esc(x.end)}</span></div>
+      <p>根拠の法令は ${esc(x.d)} に${esc(x.stLabel)}(e-Gov の記録): ${link(x.law, x.lawLabel)}</p>
+      ${x.re === 'law-status-not-checked' ? `<div class="note"><span class="late recheck">補い</span> 初めの比べは法令の廃止を見ていなかったため、${esc(x.on)} に補いました。</div>` : `<p class="muted">見つけた日 ${esc(x.on)}</p>`}
+      <p class="muted">出典: <a href="${esc(x.src)}" rel="noopener">e-Gov 法令API の法令一覧(廃止等の状態)</a></p></div>`).join('');
+    const before = lrows.filter(x => x.sd).map(x => `<div class="note">根拠の法令(${link(x.law, x.lawLabel)})は e-Gov で ${esc(x.sd)} に${esc(x.sLabel)}と記録されています。経過措置で効力が残る場合があります。</div>`).join('');
+    document.getElementById('chg').innerHTML = before + lawHtml + (html === null ? (lawHtml ? '' : `<p>比べた期間に、根拠の条・項・号の変化は見つかりませんでした${r.prov ? '' : '(根拠の条・項・号まで照合できていないので、比べていません)'}。</p>`) : html);
   } catch (e) { if (my === seq) document.getElementById('chg').innerHTML = errBox(e); }
 }
 

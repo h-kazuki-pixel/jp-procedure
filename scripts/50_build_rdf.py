@@ -119,6 +119,23 @@ for k, lab, d in [('position-undetermined', '初めの比べで位置を決め�
                   ('version-missing', '初めに版を取れなかった', '初めの比べで、その法令の 2026-11-18 の版を取れなかった(e-Gov が 404 を返した・取っていない)。')]:
     w.s(iri(f'code/recheck-reason/{k}'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/recheck-reason')), ('skos:notation', lit(k)), ('skos:prefLabel', lit(lab, 'ja')),
         ('skos:definition', lit(d, 'ja')), ('dct:issued', lit('2026-11-21', dt='date'))])
+# 根拠の法令の廃止・失効(2026-11-21 に足した。足すだけ)
+I = ('dct:issued', lit('2026-11-21', dt='date'))
+w.s('jpp:LawStatusChange', [('a', 'owl:Class'), ('rdfs:label', lit('根拠の法令の廃止・失効の記録(法令 1 つ × 比べた期間 1 つ)', 'ja')), ('rdfs:subClassOf', 'prov:Entity'),
+    ('rdfs:comment', lit('比べた期間の中で廃止・失効した根拠の法令の記録。区分は code/change-kind/law-repealed。その法令を根拠に挙げる(jpp:citedLaw)すべての手続を jpp:affects で結ぶ。条文の文言の比べ(jpp:ProvisionChange)とは別に数える。状態と日付は e-Gov 法令API v2 の法令一覧の revision_info(repeal_status・repeal_date)で、今の版の状態(current_revision_status)が Repeal のものだけ(scripts/law_status.py)。', 'ja')), I])
+w.s('jpp:LawStatus', [('a', 'owl:Class'), ('rdfs:label', lit('法令の廃止・失効の状態(e-Gov の記録)', 'ja')),
+    ('rdfs:comment', lit('比べた期間の始め以前に廃止・失効していた法令は、変化に数えず、この状態だけを持たせる。経過措置で効力が残る場合がある。', 'ja')), I])
+for p, lab, kind in [('law', '廃止・失効した根拠の法令', 'Object'), ('statusOf', 'この状態の法令', 'Object'),
+                     ('repealStatus', '廃止等の状態(コード表 code/repeal-status。e-Gov の repeal_status)', 'Object'), ('repealDate', '廃止等の日(e-Gov の repeal_date)', 'Datatype'),
+                     ('checkedOn', 'e-Gov で状態を確かめた日', 'Datatype')]:
+    w.s(f'jpp:{p}', [('a', f'owl:{kind}Property'), ('rdfs:label', lit(lab, 'ja')), I])
+w.s(iri('code/change-kind/law-repealed'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/change-kind')), ('skos:notation', lit('law-repealed')),
+    ('skos:prefLabel', lit('根拠の法令が廃止・失効した', 'ja')), ('skos:definition', lit('根拠の法令が、比べた期間の中で廃止・失効した(e-Gov の記録)。jpp:LawStatusChange に使う。', 'ja')), I])
+w.s(iri('code/repeal-status'), [('a', 'skos:ConceptScheme'), ('skos:prefLabel', lit('廃止等の状態(e-Gov の repeal_status)', 'ja')), I])
+for k, n, lab in [('repeal', 'Repeal', '廃止'), ('expire', 'Expire', '失効'), ('loss-of-effectiveness', 'LossOfEffectiveness', '効力を失った'), ('suspend', 'Suspend', '停止')]:
+    w.s(iri(f'code/repeal-status/{k}'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/repeal-status')), ('skos:notation', lit(n)), ('skos:prefLabel', lit(lab, 'ja')), I])
+w.s(iri('code/recheck-reason/law-status-not-checked'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/recheck-reason')), ('skos:notation', lit('law-status-not-checked')),
+    ('skos:prefLabel', lit('初めの比べは法令の廃止を見ていなかった', 'ja')), ('skos:definition', lit('初めの比べ(2025-11-01〜2026-11-18)は条文の文言だけを見ていて、根拠の法令の廃止・失効を見ていなかった。2026-11-21 に別のファイルで補った。', 'ja')), I])
 cnt['vocab'] = w.close()
 
 # ---------- 出典(PROV-O)

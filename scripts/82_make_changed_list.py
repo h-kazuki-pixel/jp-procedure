@@ -11,6 +11,7 @@
 - 毎週の追跡の記録には、見つけた改正(jpp:foundRevision の法令番号・公布日・施行期日)・見つけた日(jpp:foundOn)・
   施行期日が比べた期間の始め以前か(jpp:enforcedBeforePeriod)・あとで比べた理由(jpp:recheckReason の notation)を found に入れる(初めの期間の記録には無い)。
 - 期間ごとの名前(periods。初めの期間・週)を置く(閲覧ページの一覧で期間を選ぶため)。
+- 根拠の法令が廃止・失効した記録(jpp:LawStatusChange)も、区分 law-repealed の行として入れる(1 行 = 記録 × 手続。lawStatus に状態・日付・見つけた日)。
 - 並びは、区分の順(文言が変わった: それ以外、大きく書き換わった、文言が変わった: 番号の参照だけ、入れ替わった…、無くなった…)、法令名、条項号、手続ID。
 - 何度流しても、同じデータなら同じ中身になる(日時は入れない)。"""
 import sys, json, difflib, pyoxigraph as ox
@@ -18,7 +19,7 @@ STORE, OUT = sys.argv[1], sys.argv[2]
 st = ox.Store.read_only(STORE)
 P = open('queries/PREFIXES.rq', encoding='utf-8').read()
 def q(s): res = st.query(P + s); vs = [v.value for v in res.variables]; return [{v: (r[v].value if r[v] is not None else '') for v in vs} for r in res]
-ORDER = ['wording-other', 'rewritten', 'wording-numref', 'swapped-moved', 'swapped-ambiguous', 'swapped-nodest', 'removed-moved', 'removed-ambiguous', 'removed-nodest', 'removed-undetermined']
+ORDER = ['wording-other', 'rewritten', 'wording-numref', 'swapped-moved', 'swapped-ambiguous', 'swapped-nodest', 'removed-moved', 'removed-ambiguous', 'removed-nodest', 'removed-undetermined', 'law-repealed']
 chs = {r['ch']: r for r in q('''SELECT ?ch ?start ?end ?kind ?kindLabel ?prov ?provLabel ?oldText ?newText ?movedLabel (COUNT(DISTINCT ?cand) AS ?ncand) WHERE {
   ?ch a jpp:ProvisionChange ; dct:temporal ?per ; jpp:changeKind ?kind ; jpp:provision ?prov . ?per dcat:startDate ?start ; dcat:endDate ?end .
   ?kind skos:prefLabel ?kindLabel . ?prov rdfs:label ?provLabel .
@@ -50,6 +51,15 @@ for r in rows:
     c = chs[r['ch']]; k = c['kind'].rsplit('/', 1)[-1]
     out.append({'id': r['id'], 'ps': r['ps'], 'title': r['title'], 'org': r['org'], 'law': r['lawLabel'], 'prov': c['prov'], 'provLabel': c['provLabel'],
                 'kind': k, 'kindLabel': c['kindLabel'], 'start': c['start'], 'end': c['end'], 'snip': SN[r['ch']], **({'found': FOUND[r['ch']]} if r['ch'] in FOUND else {})})
+# 根拠の法令が廃止・失効した記録(jpp:LawStatusChange)。条・項・号の代わりに法令を出す
+for r in q('''SELECT ?c ?ps ?id ?title ?org ?law ?lawLabel ?start ?end ?st ?stLabel ?d ?on ?re ?kindLabel WHERE {
+  ?c a jpp:LawStatusChange ; jpp:law ?law ; jpp:affects ?ps ; dct:temporal ?per ; jpp:repealStatus ?st ; jpp:repealDate ?d ; jpp:foundOn ?on ; jpp:changeKind/skos:prefLabel ?kindLabel .
+  ?per dcat:startDate ?start ; dcat:endDate ?end . ?st skos:prefLabel ?stLabel . ?law rdfs:label ?lawLabel . ?ps dct:identifier ?id ; dct:title ?title .
+  OPTIONAL { ?ps cv:hasCompetentAuthority/skos:prefLabel ?org } OPTIONAL { ?c jpp:recheckReason/skos:notation ?re } }'''):
+    out.append({'id': r['id'], 'ps': r['ps'], 'title': r['title'], 'org': r['org'], 'law': r['lawLabel'], 'prov': r['law'], 'provLabel': '(法令)',
+                'kind': 'law-repealed', 'kindLabel': r['kindLabel'], 'start': r['start'], 'end': r['end'],
+                'snip': {'type': 'law', 'text': f"{r['d']} に{r['stLabel']}(e-Gov の記録)"},
+                'lawStatus': {'status': r['stLabel'], 'date': r['d'], 'on': r['on'], **({'recheck': r['re']} if r['re'] else {})}})
 out.sort(key=lambda x: (ORDER.index(x['kind']), x['law'], x['provLabel'], x['id']))
 S = {'note': '根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の一覧(閲覧ページの #/changed)。scripts/82_make_changed_list.py が店から作った。抜き出しの作り方はスクリプトの先頭に書いた',
      'kinds': ORDER,
@@ -59,5 +69,6 @@ with open(OUT, 'w', encoding='utf-8') as f: json.dump(S, f, ensure_ascii=False, 
 import collections
 print(f'行 {len(out):,} / 改正の記録 {len(chs):,} / 抜き出しの種類 {dict(collections.Counter(s["type"] for s in SN.values()))}')
 print('期間ごと:', dict(collections.Counter((x['start'], x['end']) for x in out)))
+print('根拠の法令が廃止・失効した行:', sum(x['kind'] == 'law-repealed' for x in out))
 print('見つけた改正のある行:', sum('found' in x for x in out), '/ 施行期日が期間の始め以前の行:', sum(x.get('found', {}).get('late', False) for x in out))
 for x in [x for x in out if x['id'] in ('119637', '3549', '112875', '222279', '50387')]: print(' ', x['id'], x['kindLabel'], x['snip'])
