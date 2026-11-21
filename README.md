@@ -11,7 +11,7 @@
 - **研究や報道**で、府省庁ごとに、どれだけの手続の根拠が変わったかを数えられます。
 - **機械**が、手続・条文・改正の記録の URI を引いて、RDF(Turtle・JSON-LD)で受け取れます。
 
-- <!-- status -->最後に確かめた日: **2026-11-18**。まだ毎週の追跡は動いていない。(`status.json` から書いた行)<!-- /status -->
+- <!-- status -->最後に確かめた日: **2026-11-21**。直近の週(2026-11-18〜2026-11-21)に足した改正の記録: 16 件。(`status.json` から書いた行)<!-- /status -->
 - 識別子の基点は `https://w3id.org/jp-procedure/`。**まだ登録していません**(下書きは `w3id/`)。
 - 国やデジタル庁が作ったデータではありません。作った人が、公開されているデータを加工して作りました。
 
@@ -23,9 +23,9 @@
 | 調査の記録(R7 の 1 行) | <!-- n:records -->76,275<!-- /n --> | `jpp:SurveyRecord`(46 列の値と、元の行番号) |
 | 所管府省庁 | <!-- n:organisations -->25<!-- /n --> | `cv:PublicOrganisation` |
 | 法令 | <!-- n:laws -->2,981<!-- /n --> | `eli:LegalResource` |
-| 条・項・号 | <!-- n:subdivisions_base -->81,572<!-- /n -->(ほかに、移った先として <!-- n:subdivisions_added -->538<!-- /n -->) | `eli:LegalResourceSubdivision` |
-| 条・項・号の本文の版 | <!-- n:expressions -->90,970<!-- /n --> | `eli:LegalExpression`(2025-11-01・2026-11-18 の本文) |
-| 改正の記録 | <!-- n:changes -->2,064<!-- /n -->(当たる手続の行 <!-- n:change_rows -->3,090<!-- /n -->) | `jpp:ProvisionChange` |
+| 条・項・号 | <!-- n:subdivisions_base -->81,572<!-- /n -->(ほかに、移った先として <!-- n:subdivisions_added -->542<!-- /n -->) | `eli:LegalResourceSubdivision` |
+| 条・項・号の本文の版 | <!-- n:expressions -->91,044<!-- /n --> | `eli:LegalExpression`(2025-11-01・2026-11-18 の本文) |
+| 改正の記録 | <!-- n:changes -->2,080<!-- /n -->(当たる手続の行 <!-- n:change_rows -->3,112<!-- /n -->) | `jpp:ProvisionChange` |
 | 期間内の法令の改正 | <!-- n:revisions -->2,840<!-- /n -->(法令 <!-- n:revision_laws -->1,252<!-- /n -->。改正の記録に結んだのは <!-- n:revisions_linked -->1,317<!-- /n -->) | `jpp:LawRevision`(e-Gov の改正履歴で施行期日が 2025-11-02〜2026-11-18 のもの) |
 
 - 条・項・号の URI(`/provision/{法令ID}/{条}/{項}/{号}`)は、「法令の中の番号で指す位置」です。版をまたいでも、同じ番号は同じ URI になります。
@@ -72,7 +72,7 @@
 | `data/redactions.csv` | 調査の記録から伏せた個人の連絡先の一覧(手続ID・列・位置・種類・理由。中身は書かない) | <!-- n:size:data/redactions.csv -->430<!-- /n --> |
 | `stats.json`・`changed.json` | 閲覧ページのはじめの画面の数と、根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の一覧(違う所の抜き出しつき)。データから機械で作る | — |
 
-- RDF は計 <!-- n:triples_total -->4,423,462<!-- /n --> トリプルです(閲覧ページ・SPARQL サーバーの店に読み込んだ数。重なりを除く)。
+- RDF は計 <!-- n:triples_total -->4,424,413<!-- /n --> トリプルです(閲覧ページ・SPARQL サーバーの店に読み込んだ数。重なりを除く)。
 - 語彙(`data/rdf/vocab.ttl.gz`・`vocab.ttl`)には、毎週の追跡が書く語を足すことがあります。足すだけで、今ある語の意味は変えず、消しません。足した語には足した日(`dct:issued`)を付けています。
 - 毎週の追跡が動くと、`data/rdf/weekly/` に改正の記録と、その週に施行期日がある改正(このデータの法令のもの)が足されます。
 - `data/tracking/` は、追跡に使う改正履歴と状態です。
@@ -131,7 +131,7 @@
 | 自作の SHACL(`shapes/shapes.ttl`。1 件の中で閉じる形) | 45 回に分けて通し、違反 0 件。上限を外した所に下限(1 つ以上)が効いていることを、小さな壊したデータで確かめた(`scripts/73_check_min_bounds.py`) |
 | CPSV-AP 3.2.0 の公式 SHACL(SEMIC、<https://semiceu.github.io/CPSV-AP/releases/3.2.0/shacl/cpsv-ap-SHACL.ttl>) | 28 回に分けて通し、違反 0 件 |
 | まとめて通す・分けて通すの比べ | 手続 2,000 件で、わざと 10 か所壊したデータも含め、違反が 1 件ずつ同じ |
-| 全体の数(`scripts/57_count_checks.py`) | 110 項目すべて合う(README の数 51 項目、区分を確かめた記録 4 項目を含む。手続 <!-- n:procedures -->76,275<!-- /n -->、改正の記録の手続の行 <!-- n:change_rows -->3,090<!-- /n -->、法令の単位で知らせた場合の手続 <!-- n:law_level -->47,352<!-- /n -->、`stats.json` の数 など) |
+| 全体の数(`scripts/57_count_checks.py`) | 110 項目すべて合う(README の数 51 項目、区分を確かめた記録 4 項目を含む。手続 <!-- n:procedures -->76,275<!-- /n -->、改正の記録の手続の行 <!-- n:change_rows -->3,112<!-- /n -->、法令の単位で知らせた場合の手続 <!-- n:law_level -->47,352<!-- /n -->、`stats.json` の数 など) |
 | 判定のモジュール(`scripts/change_rules.py`) | 決まりを順に当てた結果と、<!-- n:law_level -->47,352<!-- /n --> 行すべてで同じ区分 |
 | 抜き取りの点検 | 別の AI が 80 行と境目の 73 行を読んだ(e-Gov の本文と照らしたのは 11 行。10 行が一致、1 行は取得に失敗)。区分を変えたのは 3 件で、別の AI の読み(確かめの記録 `jpp:Review`)。人の抜き取り 23 件(2026-11-20)は、23 件とも「合う」 |
 
