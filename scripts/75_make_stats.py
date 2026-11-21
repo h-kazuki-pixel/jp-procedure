@@ -28,4 +28,4 @@ S = {'procedures': procs,
 with open(out, 'w', encoding='utf-8') as f: json.dump(S, f, ensure_ascii=False, indent=1); f.write('\n')
 print(json.dumps({k: S[k] for k in ['procedures', 'periods']}, ensure_ascii=False))
 print(f"  府省庁 {len(mins)} 行 / 手続の和 {sum(x['procedures'] for x in mins):,} / 変わった手続の和 {sum(x['changed'] for x in mins):,}")
-print(f'  メモリ最大 {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20:,.0f} MB')
+print(f'  メモリ最大 {(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)) / 2**20:,.0f} MB')

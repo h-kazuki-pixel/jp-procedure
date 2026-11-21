@@ -17,4 +17,4 @@ t = time.time() - T0
 print(f'  計: {len(st):,} 個(重なりを除いた quad の数)/ 読み込み {t:.1f} 秒(optimize を含む)')
 del st
 du = subprocess.run(['du', '-sk', D], capture_output=True, text=True).stdout.split()[0]
-print(f'  ディスクの大きさ: {int(du)*1024:,} バイト(du -sk)/ メモリ最大 {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/2**20:,.0f} MB')
+print(f'  ディスクの大きさ: {int(du)*1024:,} バイト(du -sk)/ メモリ最大 {(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)) / 2**20:,.0f} MB')

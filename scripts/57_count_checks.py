@@ -250,5 +250,5 @@ if RD and os.path.exists(RD):
         if k in mine2: chk(f'README の {k}', sorted(seen[k]) if len(seen[k]) > 1 else next(iter(seen[k])), mine2[k])
 else: print('\n     (環境変数 README が無いので、README の数との比べは飛ばした)')
 import sys
-print(f'\n確かめ {len(ok_all)} 項目のうち OK {sum(ok_all)} / 所要 {time.time()-t0:.0f} 秒 / メモリ最大 {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/2**20:,.0f} MB')
+print(f'\n確かめ {len(ok_all)} 項目のうち OK {sum(ok_all)} / 所要 {time.time()-t0:.0f} 秒 / メモリ最大 {(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)) / 2**20:,.0f} MB')
 if not all(ok_all): sys.exit(3)

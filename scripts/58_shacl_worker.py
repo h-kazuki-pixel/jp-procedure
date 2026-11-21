@@ -45,4 +45,4 @@ for r in rg.subjects(rdflib.RDF.type, SH.ValidationResult):
                     sev=pstr(rg.value(r, SH.resultSeverity), rg).replace('sh:', ''), shape=ssl, value=str(rg.value(r, SH.value)),
                     msg=str(rg.value(r, SH.resultMessage))[:200]))
 json.dump(dict(name=run['name'], triples=len(g), conforms=conf, results=res, dropped_outside_focus=dropped,
-               load_s=round(t1 - t0, 1), validate_s=round(t2 - t1, 1), maxrss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss), open(out, 'w'), ensure_ascii=False)
+               load_s=round(t1 - t0, 1), validate_s=round(t2 - t1, 1), maxrss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)), open(out, 'w'), ensure_ascii=False)
