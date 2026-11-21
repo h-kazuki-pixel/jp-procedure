@@ -29,7 +29,7 @@ rev_found = {}   # 毎週の追跡が初めて足した改正 → 初めて見�
 t0 = time.time()
 CHG = set()   # changes の回(X・Xc・Ew)のトリプル(rdflib)。ほかの回にあるものは後で除く
 typ = collections.defaultdict(set); typ_ex = set(); wreal = set(); wasof = collections.defaultdict(set); per_of = {}; objs = collections.defaultdict(list); ident = []; asof = collections.Counter(); real = set(); realized_by = set()
-ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; lsc = {}; lst = {}; periods = {}; rev_id = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set)
+ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; lsc = {}; lst = {}; unc = {}; periods = {}; rev_id = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set)
 for src, files in SRC.items():
     for fn in files:
         g = rdflib.Graph(); g.parse(gzip.open(f'{D}/{fn}.ttl.gz'), format='turtle')
@@ -70,6 +70,7 @@ for src, files in SRC.items():
             for c in g.subjects(RDF.type, JPP.LawStatusChange):
                 lsc[c] = dict(law=g.value(c, JPP.law), per=str(g.value(c, DCT.temporal)).rsplit('/', 1)[-1], date=str(g.value(c, JPP.repealDate)), aff=set(g.objects(c, JPP.affects)))
             for c in g.subjects(RDF.type, JPP.LawStatus): lst[g.value(c, JPP.statusOf)] = str(g.value(c, JPP.repealDate))
+            for c in g.subjects(RDF.type, JPP.LawStatusUnclear): unc[g.value(c, JPP.statusOf)] = str(g.value(c, JPP.currentRevisionStatus))
             for rv in g.subjects(RDF.type, JPP.Review): reviews[rv] = (str(g.value(rv, JPP.reviewerType)).rsplit('/', 1)[-1], str(g.value(rv, JPP.reviewResult)).rsplit('/', 1)[-1])
             review_ref.update(g.objects(None, JPP.review))
             for pr in g.subjects(RDF.type, DCT.PeriodOfTime): periods[str(pr).rsplit('/', 1)[-1]] = (str(g.value(pr, DCAT.startDate)), str(g.value(pr, DCAT.endDate)))
@@ -216,6 +217,11 @@ if lsc:
         ls_mine[(s0, e0)] = (len({v['law'] for v in vs}), len(set().union(*[v['aff'] for v in vs])) if vs else 0)
         if vs: print(f'     {s0}〜{e0}: 法令 {ls_mine[(s0, e0)][0]:,} / 手続 {ls_mine[(s0, e0)][1]:,}')
 if lst: chk('法令の状態の法令が、法令の中にある', set(lst) <= law, True)
+if unc:
+    print(f'     分類しない法令 {len(unc)}・その手続 {len(set().union(*[law_cites[l] for l in unc])):,}')
+    chk('分類しない法令が、法令の中にある', set(unc) <= law, True)
+    chk('分類しない法令に、廃止・失効の記録も法令の状態も無い', not (set(unc) & (set(lst) | {v['law'] for v in lsc.values()})), True)
+    chk('分類しない法令の今の版の状態が Repeal でない', all(v != 'Repeal' for v in unc.values()), True)
 STATS = os.environ.get('STATS')
 if STATS and os.path.exists(STATS):
     st = json.load(open(STATS, encoding='utf-8'))

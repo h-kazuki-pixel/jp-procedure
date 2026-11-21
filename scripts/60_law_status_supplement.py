@@ -5,6 +5,7 @@
   - 期間の中で廃止・失効した法令: 区分「根拠の法令が廃止・失効した」の記録(jpp:LawStatusChange)。見つけた日は --found、
     あとで比べた理由は「初めの比べは法令の廃止を見ていなかった」(code/recheck-reason/law-status-not-checked)。
   - 期間の始め以前に廃止・失効していた法令: 法令の状態(jpp:LawStatus)だけ。
+  - 分類しない法令(今の版の状態が Repeal でない、または日付が無い): e-Gov が返した値だけ(jpp:LawStatusUnclear)。
   - 書くファイル: data/rdf/weekly/supplement_law-status_2025-11-01_2026-11-18.ttl.gz(同じ中身なら同じバイト)。
     手続ごとの一覧(手続ID・手続名・法令名・状態・日付)を --csv に書く。"""
 import sys, os, re, io, csv, gzip, argparse, collections
@@ -47,6 +48,7 @@ s(ACT, [('a', 'prov:Activity'), ('rdfs:label', lit(f'初めの期間の補い: �
         ('rdfs:comment', lit('初めの比べ(scripts/61_build_changes.py)は条文の文言だけを見ていて、法令の廃止・失効を見ていなかった。その分を別のファイルで足した。初めのファイルは変えていない。', 'ja'))])
 for lid, info in chg: law_status.change_node(s, iri, lit, lid, info, PER, A.found, urls[0], ACT, law_procs[lid], recheck='law-status-not-checked')
 for lid, info in st: law_status.status_node(s, iri, lit, lid, info, A.found, urls[0])
+for lid, info in unclear: law_status.unclear_node(s, iri, lit, lid, info, A.found, urls[0])
 with open(fn, 'wb') as raw, gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as g: g.write(buf.getvalue().encode('utf-8'))
 procs = set().union(*[law_procs[l] for l, _ in chg]) if chg else set()
 print(f'書いたファイル: {fn}')

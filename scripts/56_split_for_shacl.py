@@ -136,7 +136,7 @@ own = [dict(name=x, data=[x, 'typeindex'], focus=[x], shapes=['ProcedureShape', 
       [dict(name=x, data=[x, 'typeindex'], focus=[x], shapes=['SubdivisionShape', 'LawShape']) for x in S] + \
       [dict(name='L', data=['L'], focus=['L'], shapes=['LawShape'])] + \
       [dict(name=x, data=[x, 'Ec' + x[1:], 'Ew' + x[1:], 'typeindex'], focus=[x, 'Ew' + x[1:]], shapes=['ExpressionShape', 'CitedProvisionShape']) for x in E] + \
-      [dict(name='X' + x[1:], data=['X' + x[1:], x, 'Ew' + x[1:], 'typeindex', 'Xc'], focus=['X' + x[1:]], shapes=['ChangeShape', 'RevisionShape', 'ReviewShape', 'SubdivisionShape', 'LawShape', 'LawStatusChangeShape', 'LawStatusShape']) for x in E]
+      [dict(name='X' + x[1:], data=['X' + x[1:], x, 'Ew' + x[1:], 'typeindex', 'Xc'], focus=['X' + x[1:]], shapes=['ChangeShape', 'RevisionShape', 'ReviewShape', 'SubdivisionShape', 'LawShape', 'LawStatusChangeShape', 'LawStatusShape', 'LawStatusUnclearShape']) for x in E]
 off = [dict(name=x, data=[x, 'typeindex'], focus=[x], shapes=None) for x in P] + \
       [dict(name=x, data=[x, 'typeindex'], focus=[x], shapes=None) for x in ['O', 'L', 'C'] + S] + \
       [dict(name='X' + x[1:], data=['X' + x[1:], 'typeindex', 'Xc'], focus=['X' + x[1:]], shapes=None) for x in E] + [dict(name='Xc', data=['Xc', 'typeindex'], focus=['Xc'], shapes=None)]   # 条・項・号も eli:LegalResource の下位クラスなので公式の LegalResourceShape の対象

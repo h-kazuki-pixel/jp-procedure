@@ -136,6 +136,10 @@ for k, n, lab in [('repeal', 'Repeal', '廃止'), ('expire', 'Expire', '失効')
     w.s(iri(f'code/repeal-status/{k}'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/repeal-status')), ('skos:notation', lit(n)), ('skos:prefLabel', lit(lab, 'ja')), I])
 w.s(iri('code/recheck-reason/law-status-not-checked'), [('a', 'skos:Concept'), ('skos:inScheme', iri('code/recheck-reason')), ('skos:notation', lit('law-status-not-checked')),
     ('skos:prefLabel', lit('初めの比べは法令の廃止を見ていなかった', 'ja')), ('skos:definition', lit('初めの比べ(2025-11-01〜2026-11-18)は条文の文言だけを見ていて、根拠の法令の廃止・失効を見ていなかった。2026-11-21 に別のファイルで補った。', 'ja')), I])
+# 分類しない法令(2026-11-21 に足した。足すだけ)
+w.s('jpp:LawStatusUnclear', [('a', 'owl:Class'), ('rdfs:label', lit('分類しない法令(e-Gov に廃止・失効の記録があるが、状態を確認できない)', 'ja')),
+    ('rdfs:comment', lit('e-Gov 法令API v2 の法令一覧に廃止・失効の記録(repeal_status)があるが、今の版の状態(current_revision_status)が Repeal でない(施行前 UnEnforced と返るなど)か、日付が無い法令。廃止・失効したとも、していないとも分類しない。e-Gov が返した値だけを持たせる(scripts/law_status.py)。', 'ja')), I])
+w.s('jpp:currentRevisionStatus', [('a', 'owl:DatatypeProperty'), ('rdfs:label', lit('今の版の状態(e-Gov の current_revision_status をそのまま)', 'ja')), ('rdfs:range', 'xsd:string'), I])
 cnt['vocab'] = w.close()
 
 # ---------- 出典(PROV-O)

@@ -7,6 +7,7 @@
 判定:
   - current_revision_status が Repeal で、repeal_date がある法令だけを「廃止・失効した」とみなす。
     UnEnforced など(廃止の版が施行前と返るもの)と日付の無いものは分類せず、last_run.json の law_status_unclear に出す。
+    初めの期間の補い(60)では、分類しない法令にも、e-Gov が返した値だけを jpp:LawStatusUnclear として持たせる(閲覧ページで「確認できず」と出す)。
   - repeal_date が比べる期間(始め < 日付 ≤ 終わり)の中: 区分「根拠の法令が廃止・失効した」の記録(jpp:LawStatusChange)にし、
     その法令を根拠に挙げる(jpp:citedLaw)すべての手続に付ける。文言の比べ(jpp:ProvisionChange)とは別に数える。
   - 期間の始め以前: 変化に数えない。法令の状態(jpp:LawStatus)として持たせるだけにする。
@@ -39,6 +40,12 @@ def status_node(s, iri, lit, lid, info, checked, src):
     """法令の状態(jpp:LawStatus)。法令ごとに 1 つ(公開しているデータに無いときだけ書く)"""
     s(iri(f'law/{lid}/status'), [('a', 'jpp:LawStatus'), ('jpp:statusOf', iri(f'law/{lid}')), ('jpp:repealStatus', iri(f'code/repeal-status/{CODE[info["repeal_status"]]}')),
                                  ('jpp:repealDate', lit(info['repeal_date'], dt='date')), ('dct:source', f'<{src}>'), ('jpp:checkedOn', lit(checked, dt='date'))])
+def unclear_node(s, iri, lit, lid, info, checked, src):
+    """分類しない法令(廃止・失効の記録はあるが、今の版の状態が Repeal でない、または日付が無い)。e-Gov が返した値をそのまま持たせる(jpp:LawStatusUnclear)"""
+    s(iri(f'law/{lid}/status-unclear'), [('a', 'jpp:LawStatusUnclear'), ('jpp:statusOf', iri(f'law/{lid}')),
+                                         ('jpp:repealStatus', iri(f'code/repeal-status/{CODE[info["repeal_status"]]}') if info.get('repeal_status') in CODE else None),
+                                         ('jpp:repealDate', lit(info['repeal_date'], dt='date') if info.get('repeal_date') else None),
+                                         ('jpp:currentRevisionStatus', lit(info.get('current_revision_status') or '')), ('dct:source', f'<{src}>'), ('jpp:checkedOn', lit(checked, dt='date'))])
 def change_node(s, iri, lit, lid, info, per, found, src, act, procs, recheck=None):
     """区分「根拠の法令が廃止・失効した」の記録(jpp:LawStatusChange)。法令 × 期間ごとに 1 つ"""
     s(iri(f'law/{lid}/repeal/{per}'), [('a', 'jpp:LawStatusChange'), ('jpp:law', iri(f'law/{lid}')), ('jpp:changeKind', iri('code/change-kind/law-repealed')),

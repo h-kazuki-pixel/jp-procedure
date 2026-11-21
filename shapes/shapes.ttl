@@ -90,6 +90,13 @@ jpp:LawStatusShape a sh:NodeShape ; sh:targetClass jpp:LawStatus ; sh:name "法�
   sh:property [ sh:path jpp:repealDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] ;
   sh:property [ sh:path dct:source ; sh:minCount 1 ; sh:nodeKind sh:IRI ] ;
   sh:property [ sh:path jpp:checkedOn ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] .
+jpp:LawStatusUnclearShape a sh:NodeShape ; sh:targetClass jpp:LawStatusUnclear ; sh:name "分類しない法令(e-Gov に廃止・失効の記録があるが、今の版の状態が Repeal でない)" ;
+  sh:property [ sh:path jpp:statusOf ; sh:minCount 1 ; sh:maxCount 1 ; sh:class eli:LegalResource ] ;
+  sh:property [ sh:path jpp:repealStatus ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/repeal-status/repeal> <https://w3id.org/jp-procedure/code/repeal-status/expire> <https://w3id.org/jp-procedure/code/repeal-status/loss-of-effectiveness> <https://w3id.org/jp-procedure/code/repeal-status/suspend> ) ] ;
+  sh:property [ sh:path jpp:repealDate ; sh:maxCount 1 ; sh:datatype xsd:date ] ;
+  sh:property [ sh:path jpp:currentRevisionStatus ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+  sh:property [ sh:path dct:source ; sh:minCount 1 ; sh:nodeKind sh:IRI ] ;
+  sh:property [ sh:path jpp:checkedOn ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] .
 jpp:ReviewShape a sh:NodeShape ; sh:targetClass jpp:Review ; sh:name "区分を確かめた記録" ;
   sh:property [ sh:path jpp:reviewerType ; sh:minCount 1 ; sh:maxCount 1 ; sh:in ( <https://w3id.org/jp-procedure/code/reviewer-type/other-ai> <https://w3id.org/jp-procedure/code/reviewer-type/human> ) ] ;
   sh:property [ sh:path jpp:reviewDate ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:date ] ;

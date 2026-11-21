@@ -526,13 +526,16 @@ async function pageProcedure(id, my) {
   const pChg = changeBlocks(`?ch jpp:affects ${iri(u)} .`, my, { showProv: true });
   pChg.catch(() => {});   // 先に基本の失敗を出す。変化の失敗は下で出す
   // 根拠の法令の廃止・失効: 期間の中の記録(区分「根拠の法令が廃止・失効した」)と、期間の前に廃止・失効していた法令の状態
-  const pLaw = sparql(`SELECT ?c ?law ?lawLabel ?stLabel ?d ?on ?re ?start ?end ?src ?sLabel ?sd WHERE {
+  const pLaw = sparql(`SELECT ?c ?law ?lawLabel ?stLabel ?d ?on ?re ?start ?end ?src ?sLabel ?sd ?un ?uLabel ?ud ?ucur WHERE {
       { ?c a jpp:LawStatusChange ; jpp:affects ${iri(u)} ; jpp:law ?law ; jpp:repealStatus/skos:prefLabel ?stLabel ; jpp:repealDate ?d ; jpp:foundOn ?on ;
            dct:temporal ?per ; dct:source ?src . ?per dcat:startDate ?start ; dcat:endDate ?end . ?law rdfs:label ?lawLabel .
         OPTIONAL { ?c jpp:recheckReason/skos:notation ?re } }
       UNION
-      { ${iri(u)} jpp:hasCitation/jpp:citedLaw ?law . ?s jpp:statusOf ?law ; jpp:repealStatus/skos:prefLabel ?sLabel ; jpp:repealDate ?sd . ?law rdfs:label ?lawLabel .
-        FILTER NOT EXISTS { ?c2 a jpp:LawStatusChange ; jpp:law ?law } } }`);
+      { ${iri(u)} jpp:hasCitation/jpp:citedLaw ?law . ?s a jpp:LawStatus ; jpp:statusOf ?law ; jpp:repealStatus/skos:prefLabel ?sLabel ; jpp:repealDate ?sd . ?law rdfs:label ?lawLabel .
+        FILTER NOT EXISTS { ?c2 a jpp:LawStatusChange ; jpp:law ?law } }
+      UNION
+      { ${iri(u)} jpp:hasCitation/jpp:citedLaw ?law . ?un a jpp:LawStatusUnclear ; jpp:statusOf ?law ; jpp:currentRevisionStatus ?ucur . ?law rdfs:label ?lawLabel .
+        OPTIONAL { ?un jpp:repealStatus/skos:prefLabel ?uLabel } OPTIONAL { ?un jpp:repealDate ?ud } } }`);
   pLaw.catch(() => {});
   let r;
   try {
@@ -560,7 +563,9 @@ async function pageProcedure(id, my) {
       ${x.re === 'law-status-not-checked' ? `<div class="note"><span class="late recheck">補い</span> 初めの比べは法令の廃止を見ていなかったため、${esc(x.on)} に補いました。</div>` : `<p class="muted">見つけた日 ${esc(x.on)}</p>`}
       <p class="muted">出典: <a href="${esc(x.src)}" rel="noopener">e-Gov 法令API の法令一覧(廃止等の状態)</a></p></div>`).join('');
     const before = lrows.filter(x => x.sd).map(x => `<div class="note">根拠の法令(${link(x.law, x.lawLabel)})は e-Gov で ${esc(x.sd)} に${esc(x.sLabel)}と記録されています。経過措置で効力が残る場合があります。</div>`).join('');
-    document.getElementById('chg').innerHTML = before + lawHtml + (html === null ? (lawHtml ? '' : `<p>比べた期間に、根拠の条・項・号の変化は見つかりませんでした${r.prov ? '' : '(根拠の条・項・号まで照合できていないので、比べていません)'}。</p>`) : html);
+    // 分類しない法令: e-Gov に廃止・失効の記録があるが、今の版の状態が施行前(UnEnforced)などと返るもの
+    const unclear = lrows.filter(x => x.un).map(x => `<div class="note">根拠の法令に e-Gov で廃止・失効の記録がありますが、${x.ucur === 'UnEnforced' ? '状態が施行前と返る' : `状態が「${esc(x.ucur)}」と返る`}ため、このデータでは分類していません(確認できず)。<br>法令: ${link(x.law, x.lawLabel)}<br>e-Gov が返した日付: ${x.ud ? esc(x.ud) : '(なし)'}${x.uLabel ? `(${esc(x.uLabel)})` : ''}</div>`).join('');
+    document.getElementById('chg').innerHTML = unclear + before + lawHtml + (html === null ? (lawHtml ? '' : `<p>比べた期間に、根拠の条・項・号の変化は見つかりませんでした${r.prov ? '' : '(根拠の条・項・号まで照合できていないので、比べていません)'}。</p>`) : html);
   } catch (e) { if (my === seq) document.getElementById('chg').innerHTML = errBox(e); }
 }
 
