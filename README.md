@@ -17,7 +17,7 @@
 
 **例**
 
-- [手続 18109「公益信託の引受けの許可の申請」](https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109): 根拠の「農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則」が 2026-04-01 に廃止され、根拠が消えました(e-Gov の記録)。
+- [手続 18109「公益信託の引受けの許可の申請」](https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109): 手続「公益信託の引受けの許可の申請」(農林水産省)が根拠に挙げる規則(農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則)は、e-Gov で 2026-04-01 に廃止と記録されています。
 - [手続 107294「非常勤職員の給与の承認」](https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/107294): 給与法 第22条第1項の額が「三万四千七百円」から「三万五千七百円」に変わりました(初めの期間)。2026-11-18 施行の改正で、さらに「三万六千七百円」に変わりました(毎週の追跡)。
 
 **入口:** [閲覧ページ](https://h-kazuki-pixel.github.io/jp-procedure/view.html) ・ [SPARQL(読むだけ)](#sparql-サーバー) ・ [問いの例](#使い方問いの例) ・ w3id `https://w3id.org/jp-procedure/`(申請中、[perma-id/w3id.org #7262](https://github.com/perma-id/w3id.org/pull/7262))

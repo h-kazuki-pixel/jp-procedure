@@ -7,9 +7,9 @@
 <!-- 外のスクリプト・書体・画像は読み込まない。読むのは SPARQL の行き先と、同じ場所の status.json・queries/ だけ -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src *; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>行政手続LOD 閲覧</title>
-<meta name="description" content="国の行政手続を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data(行政手続LOD)の閲覧ページ。">
+<meta name="description" content="国の行政手続を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data(行政手続LOD)の閲覧ページ。例: 手続「公益信託の引受けの許可の申請」(農林水産省)が根拠に挙げる規則(農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則)は、e-Gov で 2026-04-01 に廃止と記録されています。">
 <meta property="og:title" content="行政手続LOD — 根拠の条文が本当に変わった手続だけが分かる">
-<meta property="og:description" content="国の行政手続を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data(行政手続LOD)の閲覧ページ。">
+<meta property="og:description" content="国の行政手続を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data(行政手続LOD)の閲覧ページ。例: 手続「公益信託の引受けの許可の申請」(農林水産省)が根拠に挙げる規則(農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則)は、e-Gov で 2026-04-01 に廃止と記録されています。">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%231f5f8b%22/%3E%3Cpath d=%22M4 4h8M4 8h8M4 12h5%22 stroke=%22%23fff%22 stroke-width=%221.6%22/%3E%3C/svg%3E">
 <style>
@@ -124,7 +124,7 @@ footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85
   </ul>
   <p>例:</p>
   <ul>
-    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109">手続 18109「公益信託の引受けの許可の申請」</a>: 根拠の規則が 2026-04-01 に廃止され、根拠が消えた(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/18109%3E">データ</a>)</li>
+    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109">手続 18109</a>: 手続「公益信託の引受けの許可の申請」(農林水産省)が根拠に挙げる規則(農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則)は、e-Gov で 2026-04-01 に廃止と記録されています。(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/18109%3E">データ</a>)</li>
     <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/107294">手続 107294「非常勤職員の給与の承認」</a>: 給与法 第22条第1項の額が変わった(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/107294%3E">データ</a>)</li>
   </ul>
   <p><a href="https://github.com/h-kazuki-pixel/jp-procedure#readme">README(説明とデータのファイル)</a> ・ <a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query">SPARQL(読むだけ)</a></p>
@@ -158,7 +158,7 @@ const CONFIG = {
     ['q7_law_level_by_period.rq', '期間ごとの、法令の単位で知らせた場合の手続の数(はじめの画面。少し時間がかかる)'],
     ['q8_law_status_by_period.rq', '期間ごとの、根拠の法令が廃止・失効した記録の法令と手続の数(はじめの画面)'],
   ],
-  featured: '18109',                                             // はじめの画面に大きく出す例(根拠の法令の廃止で根拠が消えた手続)
+  featured: '18109',                                             // はじめの画面に大きく出す例(根拠に挙げる法令に、e-Gov で廃止の記録がある手続)
   example: '119637',                                              // はじめの画面の例に出す手続
   repo: 'https://github.com/h-kazuki-pixel/jp-procedure',          // 判定のやり方などの文書の置き場所
 };
@@ -335,7 +335,7 @@ async function pageHome(my) {
       (later.length ? `<p class="muted">毎週の追跡で足した分: ${later.map(x => `${esc(x.start)}〜${esc(x.end)} 改正の記録 ${fmt(x.changes)}・根拠の条文が変わった手続 ${fmt(x.notified)}` + (x.law_status_procedures ? `・根拠の法令が廃止・失効した手続 ${fmt(x.law_status_procedures)}` : '')).join('、')}</p>` : '');
   } catch (e) { if (my === seq) document.getElementById('stats').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
-// はじめの画面の大きな例: 根拠の法令が廃止されて根拠が消えた手続。changed.json の行を使う(SPARQL は使わない)
+// はじめの画面の大きな例: 根拠に挙げる法令に、e-Gov で廃止・失効の記録がある手続。changed.json の行を使う(SPARQL は使わない)
 async function homeFeatured(my) {
   const el = () => document.getElementById('featured'), id = CONFIG.featured;
   try {
@@ -345,8 +345,8 @@ async function homeFeatured(my) {
     if (!r || !r.lawStatus) { el().innerHTML = ''; return; }
     el().innerHTML = `<a class="feature" href="#/procedure/${encodeURIComponent(id)}">
       <span class="muted">いちばん分かりやすい例</span>
-      <strong>${esc(r.law)}が ${esc(r.lawStatus.date)} に${esc(r.lawStatus.status)}され、手続「${esc(r.title)}」(${esc(r.org || '')})の根拠が消えました。</strong>
-      <span class="muted">e-Gov の記録。比べた期間 ${esc(r.start)}〜${esc(r.end)}。初めの比べは法令の廃止を見ていなかったので、${esc(r.lawStatus.on)} に補った分です — 押すと手続のページへ</span></a>`;
+      <strong>手続「${esc(r.title)}」(${esc(r.org || '')})が根拠に挙げる${/規則$/.test(r.law) ? '規則' : '法令'}(${esc(r.law)})は、e-Gov で ${esc(r.lawStatus.date)} に${esc(r.lawStatus.status)}と記録されています。</strong>
+      <span class="muted">比べた期間 ${esc(r.start)}〜${esc(r.end)}。初めの比べは法令の廃止を見ていなかったので、${esc(r.lawStatus.on)} に補った分です — 押すと手続のページへ</span></a>`;
   } catch (e) { if (my === seq) el().innerHTML = ''; }
 }
 // はじめの画面の例: 1 つの手続の、旧い文言と新しい文言の違う所を小さな札で見せる。changed.json の抜き出しを使う(SPARQL は使わない)

@@ -5,8 +5,6 @@ type: dataset
 authors:
   - family-names: "橋本"
     given-names: "一輝"
-version: "weekly-2026-11-21"
-date-released: "2026-11-21"
 repository-code: "https://github.com/h-kazuki-pixel/jp-procedure"
 url: "https://h-kazuki-pixel.github.io/jp-procedure/view.html"
 license:
