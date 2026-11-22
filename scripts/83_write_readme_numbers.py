@@ -23,6 +23,12 @@ N['expressions'] = one('SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ?s a eli:Legal
 N['versions_zero'] = one('SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ?s a eli:LegalExpression ; jpp:lawRevision ?r FILTER(STRENDS(?r, "_000000000000000")) }')
 N['changes'] = one('SELECT (COUNT(DISTINCT ?c) AS ?n) WHERE { ?c a jpp:ProvisionChange }')
 N['change_rows'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:ProvisionChange ; jpp:affects ?p }')
+# 主な数: 初めの期間・毎週の追跡・補い(根拠の法令の廃止・失効)に分ける
+N['changes_base'] = one('SELECT (COUNT(DISTINCT ?c) AS ?n) WHERE { ?c a jpp:ProvisionChange ; dct:temporal ?per . ?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date . }')
+N['change_rows_base'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:ProvisionChange ; dct:temporal ?per ; jpp:affects ?p . ?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date . }')
+N['changes_weekly'] = N['changes'] - N['changes_base']; N['change_rows_weekly'] = N['change_rows'] - N['change_rows_base']
+N['law_status_laws'] = one('SELECT (COUNT(DISTINCT ?l) AS ?n) WHERE { ?c a jpp:LawStatusChange ; jpp:law ?l }')
+N['law_status_rows'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:LawStatusChange ; jpp:affects ?p }')
 BASE = '?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date .'
 # 初めの期間の改正: 施行期日がその期間の中にある改正。毎週の追跡が初めて足した改正で、初めて見つけた日(jpp:firstFoundOn)が期間の終わりより後のものは除く(初めに比べたときには e-Gov に無かった)
 LATE = ' FILTER NOT EXISTS { ?r jpp:firstFoundOn ?rf FILTER(?rf > "2026-11-18"^^xsd:date) }'

@@ -106,7 +106,7 @@ jobs:
           if [ -z "$(git status --porcelain data/rdf data/tracking status.json stats.json changed.json README.md)" ]; then echo "変更なし"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/rdf data/tracking/state.json data/tracking/law_revisions.csv.gz data/tracking/last_run.json status.json stats.json changed.json README.md
+          git add data/rdf data/tracking/state.json data/tracking/law_revisions.csv.gz data/tracking/last_run.json status.json stats.json changed.json README.md view.html
           if [ -f data/tracking/egov_corrections.csv ]; then git add data/tracking/egov_corrections.csv; fi
           git commit -m "毎週の追跡: ${{ steps.track.outputs.end }} まで確かめた(改正の記録 ${{ steps.track.outputs.records }} 件)"
           git push

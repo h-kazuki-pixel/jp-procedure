@@ -28,7 +28,7 @@
 | 17 | `ID_TOKEN=… 68_cloudrun_bench.py <URL>`、`ACCESS_TOKEN=… 69_cloudrun_metrics.py <PROJECT_ID> <サービス> <分>` | Cloud Run の SPARQL を測る(`../deploy.md`) |
 | 18 | `73_check_min_bounds.py shapes/shapes.ttl` | 自作 SHACL で上限を外した所に、下限(1 つ以上)が効いているか(小さな壊したデータで) |
 | 19 | `74_write_status.py --checks success\|skipped` | 毎週の追跡の結果を `status.json` に書き、README の「最後に確かめた日」の行を書き直す |
-| 20 | `75_make_stats.py <店> stats.json data/rdf` | 閲覧ページのはじめの画面の数を `queries/` の q5〜q7 で出して `stats.json` に書く。`STATS=stats.json 57_count_checks.py` で全体の数の確かめと比べる |
+| 20 | `75_make_stats.py <店> stats.json data/rdf` | 閲覧ページのはじめの画面の数を `queries/` の q5〜q7 で出して `stats.json` に書く。`STATS=stats.json 57_count_checks.py` で全体の数の確かめと比べる。stats.json の隣の README.md(冒頭)と view.html(JavaScript が無くても読める要約)の `<!-- s:キー -->` の数も、同じ数で書き込む(`stats_text.py`) |
 | 21 | `81_scan_repo.py <公開用のフォルダ> [公開しない文字列の一覧]` | 公開用のフォルダに、プロジェクト ID・番号・組織・手元のパス・メールアドレスが残っていないかを、gzip の中まで探す |
 | 22 | `78_make_human_check.py [店] [出力の場所]` | 人の抜き取り用のまとめ `human-check.csv`・`human-check.html`(別の AI が区分を決めた行と、固定の種で抜き取った 20 行)。HTML は手元で開いて、結果を CSV で書き出せる。移った行は、移った先の文言も出す(手元に残した e-Gov の 2026-11-18 版の本文から。2026-11-20 に直した。その日の抜き取りの用紙には出ていなかった) |
 | 23 | `80_make_repo.py` | 作業フォルダから公開用のリポジトリの形を作る(何度流しても同じになる)。公開しない値の置き換えは、公開しないファイル(環境変数 `REPL_PRIVATE`)から読む |

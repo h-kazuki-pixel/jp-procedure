@@ -261,7 +261,10 @@ if RD and os.path.exists(RD):
              'versions_zero': sum(1 for v in lawrev.values() if v.endswith('_000000000000000')),
              'changes': len(allchg), 'change_rows': sum(len(v['aff']) for v in allchg.values()),
              'revisions': len(base_rev), 'revision_laws': len({rev_of[r] for r in base_rev}), 'revisions_linked': len({r for v in chg.values() for r in v['revs']}),
-             'law_level': len(lawlevel)}
+             'law_level': len(lawlevel),
+             'changes_base': len(chg), 'change_rows_base': sum(len(v['aff']) for v in chg.values()),
+             'changes_weekly': len(allchg) - len(chg), 'change_rows_weekly': sum(len(v['aff']) for k, v in allchg.items() if k not in chg),
+             'law_status_laws': len({v['law'] for v in lsc.values()}), 'law_status_rows': sum(len(v['aff']) for v in lsc.values())}
     for v in chg.values():
         k = v['kind']; mine2[f'kind_rec:{k}'] = mine2.get(f'kind_rec:{k}', 0) + 1; mine2[f'kind_rows:{k}'] = mine2.get(f'kind_rows:{k}', 0) + len(v['aff'])
     for f in glob.glob(f'{REPO}/data/rdf/*.ttl.gz'): mine2['size:data/rdf/' + os.path.basename(f)] = os.path.getsize(f)
@@ -277,6 +280,26 @@ if RD and os.path.exists(RD):
     for k in sorted(seen):
         if k in mine2: chk(f'README の {k}', sorted(seen[k]) if len(seen[k]) > 1 else next(iter(seen[k])), mine2[k])
 else: print('\n     (環境変数 README が無いので、README の数との比べは飛ばした)')
+# README の冒頭と閲覧ページの要約の数(<!-- s:キー -->。75 が stats.json から書き込んだもの)を、ここで数え直した数と比べる
+if STATS and os.path.exists(STATS):
+    import re
+    BP = ('2025-11-01', '2026-11-18')
+    wk = sorted(k for k in mine if k[0] >= BP[1])
+    exp = {'procedures': len(ps), 'base_period': f'{BP[0]}〜{BP[1]}', 'base_law_level': mine[BP][2], 'base_notified': mine[BP][1],
+           'base_ratio': round(mine[BP][2] / mine[BP][1], 1), 'base_changes': mine[BP][0], 'ls_laws': ls_mine.get(BP, (0, 0))[0], 'ls_procedures': ls_mine.get(BP, (0, 0))[1]}
+    if wk: exp.update(week_period=f'{wk[-1][0]}〜{wk[-1][1]}', week_changes=mine[wk[-1]][0], week_notified=mine[wk[-1]][1])
+    exp = {k: (f'{v:,}' if isinstance(v, int) else str(v)) for k, v in exp.items()}
+    SD = os.path.dirname(os.path.abspath(STATS))
+    for fn, need in [('README.md', ['procedures', 'base_period', 'base_law_level', 'base_notified', 'base_ratio', 'ls_laws', 'ls_procedures', 'week_period', 'week_changes']),
+                     ('view.html', ['procedures', 'base_period', 'base_law_level', 'base_notified', 'ls_laws', 'ls_procedures', 'week_changes'])]:
+        fp = os.path.join(SD, fn)
+        if not os.path.exists(fp): chk(f'{fn} がある(stats.json の隣)', False, True); continue
+        got = re.findall(r'<!-- s:([a-z_]+) -->([^<]*)<!-- /s -->', open(fp, encoding='utf-8').read())
+        print(f'\n# {fn} の要約の数(<!-- s: -->、{len(got)} か所)')
+        chk(f'{fn} の要約に、要る印がすべてある', set(need) <= {k for k, _ in got}, True)
+        chk(f'{fn} の印のキーが、ここで数えられるものだけ', {k for k, _ in got} <= set(exp), True)
+        for k, v in got:
+            if k in exp: chk(f'{fn} の {k}', v, exp[k])
 import sys
 print(f'\n確かめ {len(ok_all)} 項目のうち OK {sum(ok_all)} / 所要 {time.time()-t0:.0f} 秒 / メモリ最大 {(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)) / 2**20:,.0f} MB')
 if not all(ok_all): sys.exit(3)

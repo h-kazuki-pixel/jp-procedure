@@ -1,6 +1,28 @@
 # 行政手続LOD
 
-日本の国の行政手続(令和7年度 行政手続等の棚卸調査結果の <!-- n:procedures -->76,275<!-- /n --> 件)と、その根拠の条・項・号、2025-11-01 から 2026-11-18 までの条文の変化を、Linked Open Data(RDF)にしたものです。
+国の行政手続 <!-- s:procedures -->76,275<!-- /s --> 件を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data です。
+
+**解く問題:** 法令が改正されても、どの手続の根拠が変わったかは、法令の単位では分かりません。改正のあった法令を根拠に挙げる手続をすべて見直すと、根拠の条文が変わっていない手続まで見ることになります。
+
+**証拠の数**(`stats.json`。`queries/` の q6・q7・q8 で出した数)
+
+| 何の数 | 期間 | 数 |
+|---|---|---:|
+| 法令の単位で知らせた場合の手続(根拠の法令に期間内の改正がある。q7) | 初めの期間 <!-- s:base_period -->2025-11-01〜2026-11-18<!-- /s --> | <!-- s:base_law_level -->47,352<!-- /s --> |
+| そのうち、根拠の条・項・号まで変わった手続(q6) | 同じ | <!-- s:base_notified -->3,090<!-- /s -->(約 <!-- s:base_ratio -->15.3<!-- /s --> 分の 1) |
+| 根拠の法令が廃止・失効した手続(q8。2026-11-21 にあとで補った分) | 同じ | <!-- s:ls_procedures -->207<!-- /s -->(<!-- s:ls_laws -->13<!-- /s --> 法令) |
+| 毎週の追跡: 直近の週の改正の記録(条・項・号ごと) | <!-- s:week_period -->2026-11-18〜2026-11-21<!-- /s --> | <!-- s:week_changes -->16<!-- /s --> |
+
+- <!-- status -->最後に確かめた日: **2026-11-21**。直近の週(2026-11-18〜2026-11-21)に足した改正の記録: 16 件。(`status.json` から書いた行)<!-- /status -->
+
+**例**
+
+- [手続 18109「公益信託の引受けの許可の申請」](https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109): 根拠の「農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則」が 2026-04-01 に廃止され、根拠が消えました(e-Gov の記録)。
+- [手続 107294「非常勤職員の給与の承認」](https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/107294): 給与法 第22条第1項の額が「三万四千七百円」から「三万五千七百円」に変わりました(初めの期間)。2026-11-18 施行の改正で、さらに「三万六千七百円」に変わりました(毎週の追跡)。
+
+**入口:** [閲覧ページ](https://h-kazuki-pixel.github.io/jp-procedure/view.html) ・ [SPARQL(読むだけ)](#sparql-サーバー) ・ [問いの例](#使い方問いの例) ・ w3id `https://w3id.org/jp-procedure/`(申請中、[perma-id/w3id.org #7262](https://github.com/perma-id/w3id.org/pull/7262))
+
+**目次:** [何が入っているか](#何が入っているか) ・ [ファイル](#ファイル) ・ [元のデータ](#元のデータ) ・ [元のデータから変えた点](#元のデータから変えた点) ・ [作り方](#作り方) ・ [確かめ方](#確かめ方) ・ [言えること・言えないこと](#言えること言えないこと) ・ [使い方(問いの例)](#使い方問いの例) ・ [閲覧ページ](#閲覧ページviewhtml) ・ [SPARQL サーバー](#sparql-サーバー) ・ [ライセンス](#ライセンス) ・ [出典の表示](#出典の表示)
 
 > **English summary.** *Gyosei Tetsuzuki LOD* is Linked Open Data about <!-- n:procedures -->76,275<!-- /n --> administrative procedures of the Government of Japan (from the Digital Agency's FY2025 inventory survey). It links each procedure to the article, paragraph or item of the law that is its legal basis (via the e-Gov Law API v2), keeps the text of those provisions as of 2025-11-01 and 2026-11-18, and records how each provision changed between the two dates. The text comparison is mechanical: it does not judge how important a change is. Vocabularies: CPSV-AP 3.2.0, ELI, PROV-O, SKOS. Data: CC BY 4.0. Code: MIT. This is an independent work, not an official dataset of the Government of Japan.
 
@@ -11,7 +33,6 @@
 - **研究や報道**で、府省庁ごとに、どれだけの手続の根拠が変わったかを数えられます。
 - **機械**が、手続・条文・改正の記録の URI を引いて、RDF(Turtle・JSON-LD)で受け取れます。
 
-- <!-- status -->最後に確かめた日: **2026-11-21**。直近の週(2026-11-18〜2026-11-21)に足した改正の記録: 16 件。(`status.json` から書いた行)<!-- /status -->
 - 識別子の基点は `https://w3id.org/jp-procedure/`。**まだ登録していません**(下書きは `w3id/`)。
 - 国やデジタル庁が作ったデータではありません。作った人が、公開されているデータを加工して作りました。
 
@@ -25,7 +46,8 @@
 | 法令 | <!-- n:laws -->2,981<!-- /n --> | `eli:LegalResource` |
 | 条・項・号 | <!-- n:subdivisions_base -->81,572<!-- /n -->(ほかに、移った先として <!-- n:subdivisions_added -->542<!-- /n -->) | `eli:LegalResourceSubdivision` |
 | 条・項・号の本文の版 | <!-- n:expressions -->91,044<!-- /n --> | `eli:LegalExpression`(2025-11-01・2026-11-18 の本文) |
-| 改正の記録 | <!-- n:changes -->2,080<!-- /n -->(当たる手続の行 <!-- n:change_rows -->3,112<!-- /n -->) | `jpp:ProvisionChange` |
+| 改正の記録 | 初めの期間(2025-11-01〜2026-11-18) <!-- n:changes_base -->2,064<!-- /n -->(当たる手続の行 <!-- n:change_rows_base -->3,090<!-- /n -->)・毎週の追跡で足した分 <!-- n:changes_weekly -->16<!-- /n -->(行 <!-- n:change_rows_weekly -->22<!-- /n -->)。計 <!-- n:changes -->2,080<!-- /n -->(行 <!-- n:change_rows -->3,112<!-- /n -->) | `jpp:ProvisionChange` |
+| 根拠の法令の廃止・失効(補い) | 初めの期間の補い(2026-11-21)<!-- n:law_status_laws -->13<!-- /n --> 法令(当たる手続の行 <!-- n:law_status_rows -->207<!-- /n -->) | `jpp:LawStatusChange` |
 | 期間内の法令の改正 | <!-- n:revisions -->2,840<!-- /n -->(法令 <!-- n:revision_laws -->1,252<!-- /n -->。改正の記録に結んだのは <!-- n:revisions_linked -->1,317<!-- /n -->) | `jpp:LawRevision`(e-Gov の改正履歴で施行期日が 2025-11-02〜2026-11-18 のもの) |
 
 - 条・項・号の URI(`/provision/{法令ID}/{条}/{項}/{号}`)は、「法令の中の番号で指す位置」です。版をまたいでも、同じ番号は同じ URI になります。

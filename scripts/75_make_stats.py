@@ -1,6 +1,7 @@
 """閲覧ページのはじめの画面と「府省庁ごと」の数を、queries/ の問い(q5・q6・q7・q3)で出して stats.json に書く。.venv の python(pyoxigraph)。
 使い方: python3 scripts/75_make_stats.py <店(62_oxigraph_load.py が作るもの)> <stats.json> [データの置き場所(既定 rdf)]
-何度流しても、同じデータなら同じ中身になる(日時は入れない。元にした RDF のファイルの SHA-256 を入れる)。"""
+何度流しても、同じデータなら同じ中身になる(日時は入れない。元にした RDF のファイルの SHA-256 を入れる)。
+stats.json の隣に README.md・view.html があれば、その中の <!-- s:キー --> の数も書き込む(stats_text.py)。"""
 import sys, os, json, glob, hashlib, time, resource, pyoxigraph as ox
 store, out = sys.argv[1], sys.argv[2]; RDFDIR = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('RDF_DIR', 'rdf')
 QD = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'queries')
@@ -31,6 +32,15 @@ S = {'procedures': procs,
      'note': 'notified = 根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)の数。law_level = 根拠の法令に期間内の改正がある手続の数。changes = 改正の記録(条・項・号ごと)の数。ratio = law_level ÷ notified(小数第 1 位で丸めた)。law_status_laws・law_status_procedures = 根拠の法令が廃止・失効した記録の法令の数と、それを根拠に挙げる手続の数(notified とは別に数える。初めの期間の分は 2026-11-21 の補い)。ministries = 所管府省庁ごとの手続の数(procedures)・期間に根拠の条・項・号が変わった手続の数(changed)・割合(percent、%。小数第 2 位で丸めた)。scripts/75_make_stats.py が書いた',
      'data_sha256': h.hexdigest(), 'data_files': len(files)}
 with open(out, 'w', encoding='utf-8') as f: json.dump(S, f, ensure_ascii=False, indent=1); f.write('\n')
+# README の冒頭と閲覧ページの、JavaScript が無くても読める要約の数(<!-- s:キー -->)を、stats.json と同じ数で書き込む(stats_text.py)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import stats_text
+V = stats_text.values(S)
+for fn in ['README.md', 'view.html']:
+    fp = os.path.join(os.path.dirname(os.path.abspath(out)), fn)
+    if not os.path.exists(fp): continue
+    src = open(fp, encoding='utf-8').read(); new, n = stats_text.fill(src, V, fn)
+    if new != src: open(fp, 'w', encoding='utf-8').write(new)
+    print(f'  {fn} の印 {n} か所を stats.json の数で書き込んだ')
 print(json.dumps({k: S[k] for k in ['procedures', 'periods']}, ensure_ascii=False))
 print(f"  府省庁 {len(mins)} 行 / 手続の和 {sum(x['procedures'] for x in mins):,} / 変わった手続の和 {sum(x['changed'] for x in mins):,}")
 print(f'  メモリ最大 {(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)) / 2**20:,.0f} MB')

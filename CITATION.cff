@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "このデータを使ったときは、次のとおり引用してください。If you use this dataset, please cite it as below. Code: MIT License. Data (data/): CC BY 4.0."
+title: "行政手続LOD (Gyosei Tetsuzuki LOD): Linked Open Data on Japanese administrative procedures and their legal bases"
+type: dataset
+authors:
+  - family-names: "橋本"
+    given-names: "一輝"
+version: "weekly-2026-11-21"
+date-released: "2026-11-21"
+repository-code: "https://github.com/h-kazuki-pixel/jp-procedure"
+url: "https://h-kazuki-pixel.github.io/jp-procedure/view.html"
+license:
+  - MIT
+  - CC-BY-4.0

@@ -7,6 +7,10 @@
 <!-- 外のスクリプト・書体・画像は読み込まない。読むのは SPARQL の行き先と、同じ場所の status.json・queries/ だけ -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src *; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>行政手続LOD 閲覧</title>
+<meta name="description" content="国の行政手続を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data(行政手続LOD)の閲覧ページ。">
+<meta property="og:title" content="行政手続LOD — 根拠の条文が本当に変わった手続だけが分かる">
+<meta property="og:description" content="国の行政手続を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data(行政手続LOD)の閲覧ページ。">
+<meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%231f5f8b%22/%3E%3Cpath d=%22M4 4h8M4 8h8M4 12h5%22 stroke=%22%23fff%22 stroke-width=%221.6%22/%3E%3C/svg%3E">
 <style>
 :root {
@@ -70,6 +74,9 @@ ins { background: var(--ins-bg); color: var(--ins-fg); text-decoration: underlin
 .door { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; text-decoration: none; color: var(--fg); }
 .door strong { display: block; color: var(--accent); }
 .door span { font-size: .88rem; color: var(--muted); }
+.feature { display: block; background: var(--card); border: 2px solid var(--accent); border-radius: 10px; padding: 14px 18px; margin: 12px 0 18px; text-decoration: none; color: var(--fg); }
+.feature span, .feature strong { display: block; }
+.feature strong { font-size: 1.25rem; line-height: 1.5; margin: 6px 0; }
 .example { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; text-decoration: none; color: var(--fg); }
 .example .snip { display: block; font-size: 1.05rem; margin: 6px 0; word-break: break-all; }
 .example span { display: block; }
@@ -105,7 +112,25 @@ footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85
   <a class="brand" href="#/">行政手続LOD</a>
   <nav><a href="#/">はじめ</a><a href="#/changed">変わった手続</a><a href="#/search">探す</a><a href="#/ministries">府省庁ごと</a><a href="#/queries">問いを試す</a></nav>
 </div></header>
-<main class="wrap" id="app"><p class="loading">読み込んでいます…</p></main>
+<main class="wrap" id="app">
+<!-- JavaScript が動かなくても読める要約。数は scripts/75_make_stats.py が stats.json から書き込む(s: の印の中)。JavaScript が動けば、はじめの画面に置き換わる -->
+<section id="summary">
+  <h1>行政手続LOD</h1>
+  <p>国の行政手続 <!-- s:procedures -->76,275<!-- /s --> 件を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data です。</p>
+  <ul>
+    <li>初めの期間(<!-- s:base_period -->2025-11-01〜2026-11-18<!-- /s -->)に、根拠の法令に改正があった手続(法令の単位で知らせた場合)は <strong><!-- s:base_law_level -->47,352<!-- /s --></strong>。そのうち、根拠の条・項・号まで変わった手続は <strong><!-- s:base_notified -->3,090<!-- /s --></strong>。</li>
+    <li>根拠の法令が廃止・失効した手続(あとで補った分): <strong><!-- s:ls_procedures -->207<!-- /s --></strong>(<!-- s:ls_laws -->13<!-- /s --> 法令)。</li>
+    <li>毎週の追跡: 直近の週(<!-- s:week_period -->2026-11-18〜2026-11-21<!-- /s -->)の改正の記録 <strong><!-- s:week_changes -->16<!-- /s --></strong>。</li>
+  </ul>
+  <p>例:</p>
+  <ul>
+    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109">手続 18109「公益信託の引受けの許可の申請」</a>: 根拠の規則が 2026-04-01 に廃止され、根拠が消えた(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/18109%3E">データ</a>)</li>
+    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/107294">手続 107294「非常勤職員の給与の承認」</a>: 給与法 第22条第1項の額が変わった(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/107294%3E">データ</a>)</li>
+  </ul>
+  <p><a href="https://github.com/h-kazuki-pixel/jp-procedure#readme">README(説明とデータのファイル)</a> ・ <a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query">SPARQL(読むだけ)</a></p>
+  <noscript><p class="muted">このページの検索と一覧は JavaScript で動きます。</p></noscript>
+</section>
+</main>
 <footer><div class="wrap">
   e-Gov が版を変えずに本文を直したもの(改正の記録にしていないもの)の一覧: <a id="ft-corr" rel="noopener">data/tracking/egov_corrections.csv</a>。<br>
   読むだけのページです。利用者の記録や解析のタグは入れていません。データは CC BY 4.0、出典はデジタル庁「行政手続等の棚卸調査結果」と e-Gov 法令検索(加工して作成)。国・デジタル庁が作ったものではありません。
@@ -133,6 +158,7 @@ const CONFIG = {
     ['q7_law_level_by_period.rq', '期間ごとの、法令の単位で知らせた場合の手続の数(はじめの画面。少し時間がかかる)'],
     ['q8_law_status_by_period.rq', '期間ごとの、根拠の法令が廃止・失効した記録の法令と手続の数(はじめの画面)'],
   ],
+  featured: '18109',                                             // はじめの画面に大きく出す例(根拠の法令の廃止で根拠が消えた手続)
   example: '119637',                                              // はじめの画面の例に出す手続
   repo: 'https://github.com/h-kazuki-pixel/jp-procedure',          // 判定のやり方などの文書の置き場所
 };
@@ -261,6 +287,7 @@ function diffText(a, b) {
 async function pageHome(my) {
   show(`<h1>法令が改正されたとき、根拠の条文が本当に変わった手続だけが分かります</h1>
   <p class="lead">国の行政手続と、その根拠の条・項・号を結び、比べた期間(${esc(CONFIG.period.start)}〜${esc(CONFIG.period.end)})に根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)を探せるようにしたページです。</p>
+  <div id="featured"></div>
   <div id="stats">${loading('数を読み込んでいます…')}</div>
   <h2>例</h2>
   <div id="example">${loading('例を読み込んでいます…')}</div>
@@ -285,6 +312,7 @@ async function pageHome(my) {
       ' <span class="muted">— status.json</span>';
   }).catch(() => { if (my === seq) document.getElementById('status').textContent = '最後に確かめた日: status.json を読めませんでした'; });
   homeExample(my);
+  homeFeatured(my);
   // 数は、データを作るときに queries/ の問いで出して stats.json に置いたもの(開くたびに時間のかかる問いを回さない)
   try {
     const r = await fetch(CONFIG.stats, { cache: 'no-cache' });
@@ -306,6 +334,20 @@ async function pageHome(my) {
       </div>` +
       (later.length ? `<p class="muted">毎週の追跡で足した分: ${later.map(x => `${esc(x.start)}〜${esc(x.end)} 改正の記録 ${fmt(x.changes)}・根拠の条文が変わった手続 ${fmt(x.notified)}` + (x.law_status_procedures ? `・根拠の法令が廃止・失効した手続 ${fmt(x.law_status_procedures)}` : '')).join('、')}</p>` : '');
   } catch (e) { if (my === seq) document.getElementById('stats').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+// はじめの画面の大きな例: 根拠の法令が廃止されて根拠が消えた手続。changed.json の行を使う(SPARQL は使わない)
+async function homeFeatured(my) {
+  const el = () => document.getElementById('featured'), id = CONFIG.featured;
+  try {
+    if (!changedCache) { const r = await fetch(CONFIG.changed, { cache: 'no-cache' }); if (!r.ok) throw new Error(); changedCache = await r.json(); }
+    if (my !== seq) return;
+    const r = changedCache.rows.find(x => x.id === id && x.kind === 'law-repealed');
+    if (!r || !r.lawStatus) { el().innerHTML = ''; return; }
+    el().innerHTML = `<a class="feature" href="#/procedure/${encodeURIComponent(id)}">
+      <span class="muted">いちばん分かりやすい例</span>
+      <strong>${esc(r.law)}が ${esc(r.lawStatus.date)} に${esc(r.lawStatus.status)}され、手続「${esc(r.title)}」(${esc(r.org || '')})の根拠が消えました。</strong>
+      <span class="muted">e-Gov の記録。比べた期間 ${esc(r.start)}〜${esc(r.end)}。初めの比べは法令の廃止を見ていなかったので、${esc(r.lawStatus.on)} に補った分です — 押すと手続のページへ</span></a>`;
+  } catch (e) { if (my === seq) el().innerHTML = ''; }
 }
 // はじめの画面の例: 1 つの手続の、旧い文言と新しい文言の違う所を小さな札で見せる。changed.json の抜き出しを使う(SPARQL は使わない)
 async function homeExample(my) {
