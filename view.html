@@ -118,7 +118,7 @@ footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85
   <h1>行政手続LOD</h1>
   <p>国の行政手続 <!-- s:procedures -->76,275<!-- /s --> 件を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data です。</p>
   <ul>
-    <li>初めの期間(<!-- s:base_period -->2025-11-01〜2026-11-18<!-- /s -->)に、根拠の法令に改正があった手続(法令の単位で知らせた場合)は <strong><!-- s:base_law_level -->47,352<!-- /s --></strong>。そのうち、根拠の条・項・号まで変わった手続は <strong><!-- s:base_notified -->3,090<!-- /s --></strong>。数は根拠ごとの行です。1 つの手続が根拠を複数挙げると、複数の行に数えます。</li>
+    <li>初めの期間(<!-- s:base_period -->2025-11-01〜2026-11-18<!-- /s -->)に、根拠の法令に改正があった手続(法令の単位で知らせた場合)は <strong><!-- s:base_law_level -->47,352<!-- /s --></strong>。そのうち、根拠の条・項・号まで変わった手続は <strong><!-- s:base_notified -->3,090<!-- /s --></strong>。<span data-note="rows">数は手続 ID の数です。調査では、同じ名の手続が根拠ごとに別の手続 ID で載っていることがあります(名と府省庁が同じ組 <!-- n:same_name_groups -->2,901<!-- /n --> 組・<!-- n:same_name_rows -->7,257<!-- /n --> 件)。</span></li>
     <li>根拠の法令が廃止・失効した手続(あとで補った分): <strong><!-- s:ls_procedures -->207<!-- /s --></strong>(<!-- s:ls_laws -->13<!-- /s --> 法令)。</li>
     <li>毎週の追跡: 直近の週(<!-- s:week_period -->2026-11-18〜2026-11-21<!-- /s -->)の改正の記録 <strong><!-- s:week_changes -->16<!-- /s --></strong>。</li>
   </ul>
@@ -189,7 +189,8 @@ const iri = u => '<' + String(u).replace(/[<>"{}|^`\\\s]/g, '') + '>';
 const D = d => `"${d}"^^xsd:date`;
 const PS = `?per dcat:startDate ${D(CONFIG.period.start)} ; dcat:endDate ${D(CONFIG.period.end)} .`;
 let seq = 0;   // 画面を移ったあとに古い答えで描かないため
-const ROWS_NOTE = '数は根拠ごとの行です。1 つの手続が根拠を複数挙げると、複数の行に数えます。';   // JavaScript なしの要約にも同じ文
+// 数の断り(JavaScript なしの要約の data-note="rows"。組の数は scripts/83_write_readme_numbers.py が書き込む)。要約を置き換える前に読む
+const ROWS_NOTE = (document.querySelector('[data-note="rows"]') || {}).textContent || '';
 // 例の文(scripts/83_write_readme_numbers.py が公開データから、JavaScript なしの要約の data-example に書き込んだもの)。要約を置き換える前に読む
 const EXAMPLES = Object.fromEntries([...document.querySelectorAll('[data-example]')].map(e => [e.dataset.example, e.textContent.trim()]));
 const ymd = d => { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[1]} 年 ${+m[2]} 月 ${+m[3]} 日` : esc(d); };
@@ -329,7 +330,7 @@ async function pageHome(my) {
     document.getElementById('stats').innerHTML = `
       <div class="headline">この期間に、根拠の法令に改正があった手続は <strong>${fmt(p.law_level)}</strong>${q('law_level')}。<br>
         そのうち、根拠の条・項・号が変わった(文言が変わった・別の番号へ移った・無くなった)のは <strong>${fmt(p.notified)}</strong>(約 ${Math.round(p.law_level / p.notified)} 分の 1)${q('notified')}。</div>
-      <p class="muted">${ROWS_NOTE}</p>
+      ${ROWS_NOTE ? `<p class="muted">${esc(ROWS_NOTE)}</p>` : ''}
       <div class="stats">
         <div class="stat"><div class="num">${fmt(st.procedures)}</div><div class="lab">手続</div><div class="sub">令和7年度 棚卸調査${q('procedures')}</div></div>
         <div class="stat"><div class="num">${fmt(p.changes)}</div><div class="lab">根拠の条文の変化</div><div class="sub">改正の記録(条・項・号ごと)${q('changes')}</div></div>

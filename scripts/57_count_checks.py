@@ -29,7 +29,7 @@ rev_found = {}   # 毎週の追跡が初めて足した改正 → 初めて見�
 t0 = time.time()
 CHG = set()   # changes の回(X・Xc・Ew)のトリプル(rdflib)。ほかの回にあるものは後で除く
 typ = collections.defaultdict(set); typ_ex = set(); wreal = set(); wasof = collections.defaultdict(set); per_of = {}; objs = collections.defaultdict(list); ident = []; asof = collections.Counter(); real = set(); realized_by = set()
-ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; lsc = {}; lst = {}; unc = {}; periods = {}; rev_id = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set)
+ntrip = collections.Counter(); ex_asof = collections.defaultdict(set); cited_of = {}; cit_of = {}; chg = {}; rev_of = {}; rev_date = {}; cit_law = {}; cit_mr = {}; lsc = {}; lst = {}; unc = {}; periods = {}; rev_id = {}; sub_ch = set(); lawrev = {}; reviews = {}; review_ref = collections.Counter(); comp_of = collections.defaultdict(set); org_label = collections.defaultdict(set); title_of = collections.defaultdict(set)
 for src, files in SRC.items():
     for fn in files:
         g = rdflib.Graph(); g.parse(gzip.open(f'{D}/{fn}.ttl.gz'), format='turtle')
@@ -50,6 +50,7 @@ for src, files in SRC.items():
             for s, o in g.subject_objects(JPP.asOf): ex_asof[s].add(str(o))
         if src == 'procedures':
             for s_, o in g.subject_objects(CV.hasCompetentAuthority): comp_of[s_].add(o)
+            for s_, o in g.subject_objects(DCT.title): title_of[s_].add(str(o))
         if src == 'organisations':
             for s_, o in g.subject_objects(rdflib.URIRef('http://www.w3.org/2004/02/skos/core#prefLabel')): org_label[s_].add(str(o))
         if src == 'procedures': cited_of.update({s: o for s, o in g.subject_objects(JPP.citedProvision)}); cit_of.update({s: o for s, o in g.subject_objects(JPP.hasCitation)})
@@ -265,6 +266,12 @@ if RD and os.path.exists(RD):
              'changes_base': len(chg), 'change_rows_base': sum(len(v['aff']) for v in chg.values()),
              'changes_weekly': len(allchg) - len(chg), 'change_rows_weekly': sum(len(v['aff']) for k, v in allchg.items() if k not in chg),
              'law_status_laws': len({v['law'] for v in lsc.values()}), 'law_status_rows': sum(len(v['aff']) for v in lsc.values())}
+    # 名と所管府省庁が同じ手続(手続 ID が別)の組と、その手続の数(数の断り)
+    same = collections.defaultdict(set)
+    for p_ in ps:
+        for t_ in title_of[p_]:
+            for o_ in comp_of[p_]: same[(t_, o_)].add(p_)
+    same = [len(v) for v in same.values() if len(v) > 1]; mine2['same_name_groups'] = len(same); mine2['same_name_rows'] = sum(same)
     for v in chg.values():
         k = v['kind']; mine2[f'kind_rec:{k}'] = mine2.get(f'kind_rec:{k}', 0) + 1; mine2[f'kind_rows:{k}'] = mine2.get(f'kind_rows:{k}', 0) + len(v['aff'])
     for f in glob.glob(f'{REPO}/data/rdf/*.ttl.gz'): mine2['size:data/rdf/' + os.path.basename(f)] = os.path.getsize(f)
@@ -279,6 +286,14 @@ if RD and os.path.exists(RD):
     chk('README の印のキーが、ここで数えられるものだけ', set(seen) <= set(mine2), True)
     for k in sorted(seen):
         if k in mine2: chk(f'README の {k}', sorted(seen[k]) if len(seen[k]) > 1 else next(iter(seen[k])), mine2[k])
+    chk('README に数の断り(名と府省庁が同じ組・件)の印がある', {'same_name_groups', 'same_name_rows'} <= set(seen), True)
+    # 閲覧ページ(README の隣の view.html)の <!-- n: --> の数(数の断り)
+    vp_ = os.path.join(REPO, 'view.html')
+    if os.path.exists(vp_):
+        vseen = re.findall(r'<!-- n:([^ ]+) -->([^<]*)<!-- /n -->', open(vp_, encoding='utf-8').read())
+        print(f'\n# view.html の数(<!-- n: -->、{len(vseen)} か所)')
+        chk('view.html に数の断りの印がある', {'same_name_groups', 'same_name_rows'} <= {k for k, _ in vseen}, True)
+        for k, v in vseen: chk(f'view.html の {k}', int(v.replace(',', '')) if k in mine2 else None, mine2.get(k, 'ここで数えられないキー'))
 else: print('\n     (環境変数 README が無いので、README の数との比べは飛ばした)')
 # README の冒頭と閲覧ページの要約の数(<!-- s:キー -->。75 が stats.json から書き込んだもの)を、ここで数え直した数と比べる
 if STATS and os.path.exists(STATS):

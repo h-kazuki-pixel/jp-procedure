@@ -29,6 +29,9 @@ N['change_rows'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:ProvisionChange
 N['changes_base'] = one('SELECT (COUNT(DISTINCT ?c) AS ?n) WHERE { ?c a jpp:ProvisionChange ; dct:temporal ?per . ?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date . }')
 N['change_rows_base'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:ProvisionChange ; dct:temporal ?per ; jpp:affects ?p . ?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date . }')
 N['changes_weekly'] = N['changes'] - N['changes_base']; N['change_rows_weekly'] = N['change_rows'] - N['change_rows_base']
+# 調査で、名と所管府省庁が同じ手続(手続 ID が別)の組の数と、その手続の数(README・閲覧ページの数の断り)
+_g = st.query(P + 'SELECT ?t ?o (COUNT(DISTINCT ?ps) AS ?k) WHERE { ?ps a cpsv:PublicService ; dct:title ?t ; cv:hasCompetentAuthority ?o } GROUP BY ?t ?o HAVING (COUNT(DISTINCT ?ps) > 1)')
+_g = [int(r['k'].value) for r in _g]; N['same_name_groups'] = len(_g); N['same_name_rows'] = sum(_g)
 N['law_status_laws'] = one('SELECT (COUNT(DISTINCT ?l) AS ?n) WHERE { ?c a jpp:LawStatusChange ; jpp:law ?l }')
 N['law_status_rows'] = one('SELECT (COUNT(*) AS ?n) WHERE { ?c a jpp:LawStatusChange ; jpp:affects ?p }')
 BASE = '?per dcat:startDate "2025-11-01"^^xsd:date ; dcat:endDate "2026-11-18"^^xsd:date .'
@@ -96,6 +99,11 @@ vp = os.path.join(R, 'view.html')
 if os.path.exists(vp):
     vs = open(vp, encoding='utf-8').read()
     vn, ne = fill_ex(vs, 'view.html', False)
+    # 閲覧ページの <!-- n:キー --> も README と同じ数で書く(数の断りの組の数)
+    def vrep(m):
+        if m.group(1) not in N: raise SystemExit(f'view.html の印のキー {m.group(1)} を知らない')
+        return f'<!-- n:{m.group(1)} -->{N[m.group(1)]:,}<!-- /n -->'
+    vn = re.sub(r'<!-- n:([^ ]+) -->[^<]*<!-- /n -->', vrep, vn)
     # meta description・og:description の「例: 」の後ろ(属性の中なので印を置けない)は、はじめの画面の大きな例(CONFIG.featured)の文にする
     fid = re.search(r"featured: '([0-9]+)'", vn).group(1)
     vn, nm = re.subn(r'(<meta (?:name="description"|property="og:description") content="[^"]*?例: )[^"]*(">)', lambda m: m.group(1) + html.escape(EX[fid][1]) + m.group(2), vn)
