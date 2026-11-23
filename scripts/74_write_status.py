@@ -8,7 +8,8 @@
 status.json の中身:
   last_checked … 最後に確かめた日(data/tracking/state.json の checked_through。e-Gov の更新をこの日まで見た)
   base         … 初めに比べた期間
-  weeks        … 週ごとの結果。期間、確かめた日時(UTC)、足した改正の記録の件数(0 件を含む)、手続の行、期間内の改正の数、取得の失敗、確かめの結果、
+  weeks        … 週ごとの結果。期間、確かめた日時(UTC)、足した改正の記録の件数(0 件を含む)、手続の行、根拠の条・項・号が変わった手続の数(procedures。
+                 last_run.json に無い週は changed.json の、その期間の行(区分 law-repealed を除く)の手続ID の数)、期間内の改正の数、取得の失敗、確かめの結果、
                  その時点で確かめられなかった日と法令の数(unconfirmed_days・unconfirmed_laws)、
                  更新データ(一括ダウンロード)の日ごとの結果(days。取れなかった日で、法令API v1 の更新法令一覧が 0 件の日は「更新法令なし(v1 の一覧で 0 件)」)、
                  v1 の一覧の件数と更新データの行数が合わなかった日(v1_mismatch。合わない日があるときだけ)、
@@ -31,6 +32,17 @@ st = json.load(open(A.out, encoding='utf-8')) if os.path.exists(A.out) else {
     'last_checked': json.load(open(f'{A.tracking}/state.json', encoding='utf-8'))['checked_through'],
     'base': {'period': ['2025-11-01', '2026-11-18'], 'note': '初めに比べた期間(scripts/61_build_changes.py)。毎週の追跡はこの次の日から'},
     'weeks': []}
+def week_procs(period):
+    # changed.json(82_make_changed_list.py)の、その期間の行の手続ID の数(根拠の法令の廃止・失効の行は除く)。changed.json が無ければ None
+    if not os.path.exists('changed.json'): return None
+    rows = json.load(open('changed.json', encoding='utf-8'))['rows']
+    return len({r['id'] for r in rows if [r['start'], r['end']] == list(period) and r['kind'] != 'law-repealed'})
+# 前からある週で procedures の無いものは、changed.json から補う
+fill = False
+for w in st['weeks']:
+    if 'procedures' not in w and (n := week_procs(w['period'])) is not None: w['procedures'] = n; fill = True
+if fill and A.readme_only:
+    with open(A.out, 'w', encoding='utf-8') as f: json.dump(st, f, ensure_ascii=False, indent=1); f.write('\n')
 if A.readme_only and not os.path.exists(A.out):   # 初めの 1 回: 週の結果はまだ無い
     with open(A.out, 'w', encoding='utf-8') as f: json.dump(st, f, ensure_ascii=False, indent=1); f.write('\n')
 if not A.readme_only:
@@ -38,7 +50,7 @@ if not A.readme_only:
     state = json.load(open(f'{A.tracking}/state.json', encoding='utf-8'))
     run = json.load(open(f'{A.tracking}/last_run.json', encoding='utf-8'))
     wk = {'period': run['period'], 'checked_at': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-          'records': run['records'], 'rows': run['rows'], 'revisions': run.get('revisions', 0), 'failures': len(run.get('failures') or []), 'checks': A.checks,
+          'records': run['records'], 'rows': run['rows'], 'procedures': run['procedures'] if 'procedures' in run else week_procs(run['period']), 'revisions': run.get('revisions', 0), 'failures': len(run.get('failures') or []), 'checks': A.checks,
           'unconfirmed_days': len(run.get('unconfirmed_days') or []), 'unconfirmed_laws': len(run.get('unconfirmed_laws') or []),
           'days': run.get('days') or {}, 'egov_corrections': len(run.get('corrections_new') or [])}
     if run.get('v1_mismatch'): wk['v1_mismatch'] = run['v1_mismatch']

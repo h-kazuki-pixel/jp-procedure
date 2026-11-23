@@ -438,7 +438,7 @@ long_pending = [{'day': d, 'since': v['since'], 'error': v.get('error')} for d, 
 if fail: say(f'取れなかったもの(次の実行でもう一度取る): {fail}')
 if corr_new: say(f'  版を変えない直し(e-Gov)を新しく見つけた: {len(corr_new)}(改正の記録にしない。{corr_fp} に書いた)')
 if v1_mismatch: say(f'  v1 の一覧の件数と更新データの行数が合わない日: {v1_mismatch}')
-json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'revisions': len(win_revs), 'versions_added': len(vers_only),
+json.dump({'period': [start_all, end], 'targets': len(targets), 'records': len(recs), 'rows': sum(len(r['procs']) for r in recs), 'procedures': len(set().union(*[r['procs'] for r in recs])) if recs else 0, 'revisions': len(win_revs), 'versions_added': len(vers_only),
            'law_changes': len(law_changes), 'law_change_procedures': len(set().union(*[law_procs[l] for l, _ in law_changes])) if law_changes else 0,
            'law_status_added': len(law_status_new), 'law_status_unclear': law_unclear, 'law_status_error': ls_err, 'counts': dict(cnt), 'failures': fail,
            'unconfirmed_days': sorted(pending), 'unconfirmed_laws': sorted(state['failed_laws']), 'long_pending': long_pending, 'skipped': skipped,

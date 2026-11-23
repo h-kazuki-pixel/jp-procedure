@@ -113,19 +113,19 @@ footer { border-top: 1px solid var(--line); padding: 16px 0 32px; font-size: .85
   <nav><a href="#/">はじめ</a><a href="#/changed">変わった手続</a><a href="#/search">探す</a><a href="#/ministries">府省庁ごと</a><a href="#/queries">問いを試す</a></nav>
 </div></header>
 <main class="wrap" id="app">
-<!-- JavaScript が動かなくても読める要約。数は scripts/75_make_stats.py が stats.json から書き込む(s: の印の中)。JavaScript が動けば、はじめの画面に置き換わる -->
+<!-- JavaScript が動かなくても読める要約。数は scripts/75_make_stats.py が stats.json から書き込む(s: の印の中)。例の文は scripts/83_write_readme_numbers.py が公開データから書き込む(e: の印の中と meta・og:description)。はじめの画面の大きな例は、この e: の文を読んで出す。JavaScript が動けば、はじめの画面に置き換わる -->
 <section id="summary">
   <h1>行政手続LOD</h1>
   <p>国の行政手続 <!-- s:procedures -->76,275<!-- /s --> 件を根拠の条・項・号と結び、法令が改正・廃止されたとき、根拠が実際に変わった手続だけを毎週見つけて公開する Linked Open Data です。</p>
   <ul>
-    <li>初めの期間(<!-- s:base_period -->2025-11-01〜2026-11-18<!-- /s -->)に、根拠の法令に改正があった手続(法令の単位で知らせた場合)は <strong><!-- s:base_law_level -->47,352<!-- /s --></strong>。そのうち、根拠の条・項・号まで変わった手続は <strong><!-- s:base_notified -->3,090<!-- /s --></strong>。</li>
+    <li>初めの期間(<!-- s:base_period -->2025-11-01〜2026-11-18<!-- /s -->)に、根拠の法令に改正があった手続(法令の単位で知らせた場合)は <strong><!-- s:base_law_level -->47,352<!-- /s --></strong>。そのうち、根拠の条・項・号まで変わった手続は <strong><!-- s:base_notified -->3,090<!-- /s --></strong>。数は根拠ごとの行です。1 つの手続が根拠を複数挙げると、複数の行に数えます。</li>
     <li>根拠の法令が廃止・失効した手続(あとで補った分): <strong><!-- s:ls_procedures -->207<!-- /s --></strong>(<!-- s:ls_laws -->13<!-- /s --> 法令)。</li>
     <li>毎週の追跡: 直近の週(<!-- s:week_period -->2026-11-18〜2026-11-21<!-- /s -->)の改正の記録 <strong><!-- s:week_changes -->16<!-- /s --></strong>。</li>
   </ul>
   <p>例:</p>
   <ul>
-    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109">手続 18109</a>: 手続「公益信託の引受けの許可の申請」(農林水産省)が根拠に挙げる規則(農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則)は、e-Gov で 2026-04-01 に廃止と記録されています。(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/18109%3E">データ</a>)</li>
-    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/107294">手続 107294「非常勤職員の給与の承認」</a>: 給与法 第22条第1項の額が変わった(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/107294%3E">データ</a>)</li>
+    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/18109">手続 18109</a>: <span data-example="18109"><!-- e:18109 -->手続「公益信託の引受けの許可の申請」(農林水産省)が根拠に挙げる規則(農林水産大臣の所管に属する公益信託の引受けの許可及び監督に関する規則)は、e-Gov で 2026-04-01 に廃止と記録されています。<!-- /e --></span>(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/18109%3E">データ</a>)</li>
+    <li><a href="https://h-kazuki-pixel.github.io/jp-procedure/view.html#/procedure/107294">手続 107294</a>: <span data-example="107294"><!-- e:107294 -->一般職の職員の給与に関する法律 第22条第1項の額が「三万四千七百円」から「三万五千七百円」に変わりました(初めの期間)。2026-11-18 施行の改正で、「三万五千七百円」から「三万六千八百円」に変わりました(毎週の追跡)。<!-- /e --></span>(<a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query?query=DESCRIBE%20%3Chttps://w3id.org/jp-procedure/procedure/107294%3E">データ</a>)</li>
   </ul>
   <p><a href="https://github.com/h-kazuki-pixel/jp-procedure#readme">README(説明とデータのファイル)</a> ・ <a href="https://jp-procedure-sparql-5psr6o4zja-an.a.run.app/query">SPARQL(読むだけ)</a></p>
   <noscript><p class="muted">このページの検索と一覧は JavaScript で動きます。</p></noscript>
@@ -189,6 +189,9 @@ const iri = u => '<' + String(u).replace(/[<>"{}|^`\\\s]/g, '') + '>';
 const D = d => `"${d}"^^xsd:date`;
 const PS = `?per dcat:startDate ${D(CONFIG.period.start)} ; dcat:endDate ${D(CONFIG.period.end)} .`;
 let seq = 0;   // 画面を移ったあとに古い答えで描かないため
+const ROWS_NOTE = '数は根拠ごとの行です。1 つの手続が根拠を複数挙げると、複数の行に数えます。';   // JavaScript なしの要約にも同じ文
+// 例の文(scripts/83_write_readme_numbers.py が公開データから、JavaScript なしの要約の data-example に書き込んだもの)。要約を置き換える前に読む
+const EXAMPLES = Object.fromEntries([...document.querySelectorAll('[data-example]')].map(e => [e.dataset.example, e.textContent.trim()]));
 const ymd = d => { const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[1]} 年 ${+m[2]} 月 ${+m[3]} 日` : esc(d); };
 const md = d => { const m = String(d || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? `${+m[1]} 月 ${+m[2]} 日` : esc(d); };
 // 毎週の追跡が見つけた改正(jpp:foundRevision)。f = {num, prom, enf, on, late, recheck}
@@ -286,7 +289,7 @@ function diffText(a, b) {
 // ---- はじめ ----
 async function pageHome(my) {
   show(`<h1>法令が改正されたとき、根拠の条文が本当に変わった手続だけが分かります</h1>
-  <p class="lead">国の行政手続と、その根拠の条・項・号を結び、比べた期間(${esc(CONFIG.period.start)}〜${esc(CONFIG.period.end)})に根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)を探せるようにしたページです。</p>
+  <p class="lead">国の行政手続と、その根拠の条・項・号を結び、比べた期間(${esc(CONFIG.period.start)}〜${esc(CONFIG.period.end)})に根拠の条・項・号が変わった手続(文言が変わった・別の番号へ移った・無くなった)と、根拠の法令が廃止・失効した手続を探せます。毎週、e-Gov を確かめ直して足しています。</p>
   <div id="featured"></div>
   <div id="stats">${loading('数を読み込んでいます…')}</div>
   <h2>例</h2>
@@ -301,7 +304,8 @@ async function pageHome(my) {
   <p class="muted" id="status">最後に確かめた日: 読み込んでいます…</p>
   <p class="muted">区分は、文言を機械で比べて決めたものです(<a href="${esc(METHOD)}" rel="noopener">判定のやり方</a>)。手続の中身が変わるかどうかは判断していません。</p>`);
   bindSearch();
-  fetch(CONFIG.status, { cache: 'no-cache' }).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(st => {
+  const statusP = fetch(CONFIG.status, { cache: 'no-cache' }).then(r => r.ok ? r.json() : Promise.reject(r.status));
+  statusP.then(st => {
     if (my !== seq) return;
     const w = (st.weeks || []).slice(-1)[0];
     document.getElementById('status').innerHTML = `最後に確かめた日: <strong>${esc(st.last_checked)}</strong>` +
@@ -322,32 +326,41 @@ async function pageHome(my) {
     const p = (st.periods || []).find(x => x.start === CONFIG.period.start && x.end === CONFIG.period.end);
     if (!p) throw new Error(CONFIG.stats + ' に、期間 ' + CONFIG.period.start + '〜' + CONFIG.period.end + ' の数がありません');
     const q = k => { const f = (st.queries || {})[k]; return f ? ` <a class="q" href="#/queries?f=${encodeURIComponent(f.replace(/^queries\//, ''))}" title="${esc(f)}">元の問い</a>` : ''; };
-    const later = (st.periods || []).filter(x => x.start >= CONFIG.period.end);
     document.getElementById('stats').innerHTML = `
       <div class="headline">この期間に、根拠の法令に改正があった手続は <strong>${fmt(p.law_level)}</strong>${q('law_level')}。<br>
         そのうち、根拠の条・項・号が変わった(文言が変わった・別の番号へ移った・無くなった)のは <strong>${fmt(p.notified)}</strong>(約 ${Math.round(p.law_level / p.notified)} 分の 1)${q('notified')}。</div>
+      <p class="muted">${ROWS_NOTE}</p>
       <div class="stats">
         <div class="stat"><div class="num">${fmt(st.procedures)}</div><div class="lab">手続</div><div class="sub">令和7年度 棚卸調査${q('procedures')}</div></div>
         <div class="stat"><div class="num">${fmt(p.changes)}</div><div class="lab">根拠の条文の変化</div><div class="sub">改正の記録(条・項・号ごと)${q('changes')}</div></div>
         <div class="stat"><div class="num">${fmt(p.notified)}</div><div class="lab">根拠の条文が変わった手続</div><div class="sub">根拠の条・項・号が変わった手続(初めの比べ)${q('notified')}</div></div>
         ${p.law_status_procedures ? `<div class="stat"><div class="num">${fmt(p.law_status_procedures)}</div><div class="lab">根拠の法令が廃止・失効した手続</div><div class="sub">法令 ${fmt(p.law_status_laws)}。初めの比べは法令の廃止を見ていなかったので、あとで補った分(条文の変化とは別に数える)${q('law_status')}</div></div>` : ''}
-      </div>` +
-      (later.length ? `<p class="muted">毎週の追跡で足した分: ${later.map(x => `${esc(x.start)}〜${esc(x.end)} 改正の記録 ${fmt(x.changes)}・根拠の条文が変わった手続 ${fmt(x.notified)}` + (x.law_status_procedures ? `・根拠の法令が廃止・失効した手続 ${fmt(x.law_status_procedures)}` : '')).join('、')}</p>` : '');
+        <div class="stat" id="weekly"><div class="num">…</div><div class="lab">毎週の追跡</div><div class="sub">status.json を読んでいます…</div></div>
+      </div>`;
+    // 「毎週の追跡」の札: 大きな数は直近の週の改正の記録。下に最後に確かめた日・根拠の条文が変わった手続(status.json)
+    statusP.then(sj => {
+      if (my !== seq) return;
+      const w = (sj.weeks || []).slice(-1)[0], el = document.getElementById('weekly');
+      el.innerHTML = w ? `<div class="num">${fmt(w.records)}</div><div class="lab">毎週の追跡</div><div class="sub" title="直近の週(${esc(w.period[0])}〜${esc(w.period[1])})の改正の記録">最後に確かめた日 ${esc(sj.last_checked)}・根拠の条文が変わった手続 ${w.procedures == null ? '(status.json に無い)' : fmt(w.procedures)}</div>`
+        : `<div class="num">0</div><div class="lab">毎週の追跡</div><div class="sub">まだ動いていません</div>`;
+    }).catch(() => { if (my === seq) document.getElementById('weekly').querySelector('.sub').textContent = 'status.json を読めませんでした'; });
   } catch (e) { if (my === seq) document.getElementById('stats').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
-// はじめの画面の大きな例: 根拠に挙げる法令に、e-Gov で廃止・失効の記録がある手続。changed.json の行を使う(SPARQL は使わない)
+// はじめの画面の大きな例: 根拠に挙げる法令に、e-Gov で廃止・失効の記録がある手続。文は EXAMPLES(83 が公開データから書いたもの)。期間と補った日は changed.json の行から
 async function homeFeatured(my) {
-  const el = () => document.getElementById('featured'), id = CONFIG.featured;
+  const el = () => document.getElementById('featured'), id = CONFIG.featured, text = EXAMPLES[id];
+  if (!text) { el().innerHTML = ''; return; }
+  const draw = r => { el().innerHTML = `<a class="feature" href="#/procedure/${encodeURIComponent(id)}">
+      <span class="muted">いちばん分かりやすい例</span>
+      <strong>${esc(text)}</strong>
+      <span class="muted">${r ? `比べた期間 ${esc(r.start)}〜${esc(r.end)}。初めの比べは法令の廃止を見ていなかったので、${esc(r.lawStatus.on)} に補った分です — ` : ''}押すと手続のページへ</span></a>`; };
+  draw(null);
   try {
     if (!changedCache) { const r = await fetch(CONFIG.changed, { cache: 'no-cache' }); if (!r.ok) throw new Error(); changedCache = await r.json(); }
     if (my !== seq) return;
     const r = changedCache.rows.find(x => x.id === id && x.kind === 'law-repealed');
-    if (!r || !r.lawStatus) { el().innerHTML = ''; return; }
-    el().innerHTML = `<a class="feature" href="#/procedure/${encodeURIComponent(id)}">
-      <span class="muted">いちばん分かりやすい例</span>
-      <strong>手続「${esc(r.title)}」(${esc(r.org || '')})が根拠に挙げる${/規則$/.test(r.law) ? '規則' : '法令'}(${esc(r.law)})は、e-Gov で ${esc(r.lawStatus.date)} に${esc(r.lawStatus.status)}と記録されています。</strong>
-      <span class="muted">比べた期間 ${esc(r.start)}〜${esc(r.end)}。初めの比べは法令の廃止を見ていなかったので、${esc(r.lawStatus.on)} に補った分です — 押すと手続のページへ</span></a>`;
-  } catch (e) { if (my === seq) el().innerHTML = ''; }
+    if (r && r.lawStatus) draw(r);
+  } catch (e) { /* 文はそのまま出しておく */ }
 }
 // はじめの画面の例: 1 つの手続の、旧い文言と新しい文言の違う所を小さな札で見せる。changed.json の抜き出しを使う(SPARQL は使わない)
 async function homeExample(my) {

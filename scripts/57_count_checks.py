@@ -300,6 +300,80 @@ if STATS and os.path.exists(STATS):
         chk(f'{fn} の印のキーが、ここで数えられるものだけ', {k for k, _ in got} <= set(exp), True)
         for k, v in got:
             if k in exp: chk(f'{fn} の {k}', v, exp[k])
+# 例の文(<!-- e:手続ID -->。83 が店への問いで書いたもの)の額・日付・法令の名を、公開データのファイルを直に読んだ値と比べる。
+# 手続 18109: 根拠の法令の状態(jpp:LawStatusChange)の法令の名・日付・状態。手続 107294: 改正の記録 2 つ(初めの期間と毎週の追跡)の旧い文言・新しい文言の、違う額と、毎週の追跡が見つけた改正の施行期日
+if STATS and os.path.exists(STATS):
+    import re, html as _html
+    SD = os.path.dirname(os.path.abspath(STATS)); BASEU = 'https://w3id.org/jp-procedure/'
+    EXID = {'18109': 'status', '107294': 'amount'}
+    pu = {i: URIRef(BASEU + 'procedure/' + i) for i in EXID}
+    ex_ls = {i: [v for v in lsc.values() if pu[i] in v['aff'] and v['per'] == '2025-11-01_2026-11-18'] for i in EXID}
+    ex_ch = {i: sorted([(per_of[c], v) for c, v in allchg.items() if pu[i] in v['aff']], key=lambda x: x[0]) for i in EXID}
+    need = set(pu.values()) | {v['law'] for i in EXID for v in ex_ls[i]} | {x for i in EXID for _, v in ex_ch[i] for x in (v['prov'], v['old'], v['new'], v.get('found'))}
+    need.discard(None)
+    # ファイルを 1 回だけ読み通す: 例の主語のトリプルすべてと、すべての主語の rdfs:label・skos:prefLabel・eli:is_part_of
+    LBL, PREF, PART = 'http://www.w3.org/2000/01/rdf-schema#label', 'http://www.w3.org/2004/02/skos/core#prefLabel', str(ELI.is_part_of)
+    G = collections.defaultdict(lambda: collections.defaultdict(set))
+    subs = {str(x) for x in need} | {str(c) for c in lsc if any(pu[i] in lsc[c]['aff'] for i in EXID)}
+    for f in sorted(glob.glob(f'{RDFDIR}/*.ttl.gz')) + WEEKLY:
+        for q in ox.parse(gzip.open(f), ox.RdfFormat.TURTLE):
+            if q.subject.value in subs or q.predicate.value in (LBL, PREF, PART): G[q.subject.value][q.predicate.value].add(q.object.value)
+    TXT, ORG = str(JPP.text), str(CV.hasCompetentAuthority)
+    one_ = lambda s_, p_: next(iter(G[str(s_)][p_])) if s_ is not None and len(G[str(s_)][p_]) == 1 else None
+    def law_of(p_):
+        x = str(p_)
+        while x and PART in G[x]: x = one_(x, PART)
+        return x
+    AMT = re.compile(r'[〇一二三四五六七八九十百千万億]+円')
+    def diff_amt(a, b):
+        A_, B_ = AMT.findall(a or ''), AMT.findall(b or '')
+        d = [(x, y) for x, y in zip(A_, B_) if x != y]
+        return d[0] if len(A_) == len(B_) and len(d) == 1 else None
+    exp_ex = {}
+    for i, kind in EXID.items():
+        t = one_(pu[i], 'http://purl.org/dc/terms/title'); o = one_(one_(pu[i], ORG), PREF)
+        if kind == 'status' and len(ex_ls[i]) == 1:
+            v = ex_ls[i][0]; c = next(c for c in lsc if lsc[c] is v)
+            exp_ex[i] = {'title': t, 'org': o, 'law': one_(v['law'], LBL), 'date': v['date'], 'status': one_(one_(c, str(JPP.repealStatus)), PREF)}
+        if kind == 'amount' and len(ex_ch[i]) == 2:
+            (p0, v0), (p1, v1) = ex_ch[i]
+            exp_ex[i] = {'title': t, 'law': one_(law_of(v0['prov']), LBL), 'prov': one_(v0['prov'], LBL), 'base': diff_amt(one_(v0['old'], TXT), one_(v0['new'], TXT)),
+                         'week': diff_amt(one_(v1['old'], TXT), one_(v1['new'], TXT)), 'date': one_(v1.get('found'), str(JPP.enforcementDate)), 'periods': (p0, p1)}
+    print(f'\n# 例の文(<!-- e: -->)と公開データ: {exp_ex}')
+    chk('例の手続 2 つの値が、公開データから 1 つずつ決まる', sorted(k for k, v in exp_ex.items() if all(x is not None for x in v.values())), sorted(EXID))
+    def check_sentence(where, i, tx):
+        e = exp_ex.get(i)
+        if not e: return
+        if EXID[i] == 'status':
+            m = re.search(r'手続「(.+?)」\((.+?)\)が根拠に挙げる(?:規則|法令)\((.+?)\)は、e-Gov で (\d{4}-\d{2}-\d{2}) に(.+?)と記録されています。', tx)
+            chk(f'{where} の例 {i}: 手続の名・府省庁・法令の名・日付・状態', m.groups() if m else None, (e['title'], e['org'], e['law'], e['date'], e['status']))
+        else:
+            m = re.search(r'^(.+?) (第.+?)の額が「(.+?)」から「(.+?)」に変わりました\(初めの期間\)。(\d{4}-\d{2}-\d{2}) 施行の改正で、「(.+?)」から「(.+?)」に変わりました\(毎週の追跡\)。$', tx)
+            chk(f'{where} の例 {i}: 法令の名・条項・額(初めの期間)・日付・額(毎週の追跡)', m.groups() if m else None, (e['law'], e['prov'], *e['base'], e['date'], *e['week']))
+    for fn in ['README.md', 'view.html']:
+        fp = os.path.join(SD, fn)
+        if not os.path.exists(fp): continue
+        src_ = open(fp, encoding='utf-8').read()
+        got = dict(re.findall(r'<!-- e:([0-9]+) -->([^<]*)<!-- /e -->', src_))
+        chk(f'{fn} に例の印が 2 つ(18109・107294)', sorted(got), sorted(EXID))
+        for i, tx in got.items():
+            tx = _html.unescape(tx)
+            if fn == 'README.md':
+                m = re.match(r'\[手続 ([0-9]+)「(.+?)」\]\(https://h-kazuki-pixel\.github\.io/jp-procedure/view\.html#/procedure/([0-9]+)\): (.*)$', tx)
+                chk(f'README の例 {i} のリンク(手続ID・手続の名)', (m.group(1), m.group(2), m.group(3)) if m else None, (i, exp_ex.get(i, {}).get('title'), i))
+                tx = m.group(4) if m else tx
+            check_sentence(fn, i, tx)
+        if fn == 'view.html':
+            for nm in ['name="description"', 'property="og:description"']:
+                m = re.search(r'<meta ' + nm + r' content="[^"]*?例: ([^"]*)">', src_)
+                chk(f'view.html の meta {nm} に例の文がある', m is not None, True)
+                if m: check_sentence(f'view.html の meta {nm}', '18109', _html.unescape(m.group(1)))
+    # status.json の週ごとの「根拠の条文が変わった手続」(procedures。はじめの画面の「毎週の追跡」の札)を、ここで数えた数と比べる
+    sp = os.path.join(SD, 'status.json')
+    if os.path.exists(sp):
+        for w in json.load(open(sp, encoding='utf-8'))['weeks']:
+            k = tuple(w['period'])
+            chk(f'status.json の {k[0]}〜{k[1]} の改正の記録・根拠の条文が変わった手続', (w['records'], w.get('procedures')), (mine[k][0], mine[k][1]) if k in mine else (0, 0))
 import sys
 print(f'\n確かめ {len(ok_all)} 項目のうち OK {sum(ok_all)} / 所要 {time.time()-t0:.0f} 秒 / メモリ最大 {(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)) / 2**20:,.0f} MB')
 if not all(ok_all): sys.exit(3)
